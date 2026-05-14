@@ -34,7 +34,7 @@ of the session.
    and `streamlit_app.py`.
 3. In the app's **Secrets** panel, add:
 
-       password = "Elimperio"
+       password = "your-shared-password"
 
 4. Deploy. Anyone with the URL who knows the password gets in.
 
