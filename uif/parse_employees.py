@@ -39,7 +39,8 @@ KNOWN_LABELS = {
     "Average working days per period", "Rate per hour", "Benefit Details",
 }
 
-_TITLES = {"mr", "mrs", "ms", "miss", "dr", "prof"}
+# Particles that must stay glued to the surname when present.
+SURNAME_PARTICLES = {"van", "du", "le", "de", "der", "den", "te", "ter"}
 
 
 def _decode(file_bytes: bytes) -> str:
@@ -89,16 +90,28 @@ def _ddmmyyyy_to_yyyymmdd(value: str) -> str:
     return f"{match.group(3)}{match.group(2)}{match.group(1)}" if match else ""
 
 
-def _surname_from_employee_name(employee_name: str) -> str:
-    """'Mr J Baardnes' -> 'Baardnes', 'R van Wyk' -> 'van Wyk'."""
-    tokens = employee_name.split()
-    while tokens:
-        head = tokens[0]
-        if head.lower().rstrip(".") in _TITLES or len(head.rstrip(".")) == 1:
-            tokens.pop(0)
-        else:
-            break
-    return " ".join(tokens).strip()
+def extract_first_name(full_names_field: str) -> str:
+    """First name = leading whitespace-delimited token of the 'Full names' field."""
+    tokens = (full_names_field or "").strip().split()
+    return tokens[0] if tokens else ""
+
+
+def extract_surname(employee_name_field: str) -> str:
+    """
+    Surname = trailing token(s) of the 'Employee name' field, walking
+    right-to-left and absorbing particles like 'van', 'du', 'le', 'de',
+    'der', 'den', 'te', 'ter' (case-insensitive) so compound surnames
+    like 'van Wyk' and 'van der Merwe' come through intact.
+    """
+    tokens = (employee_name_field or "").strip().split()
+    if not tokens:
+        return ""
+    surname_tokens = [tokens[-1]]
+    i = len(tokens) - 2
+    while i >= 0 and tokens[i].lower() in SURNAME_PARTICLES:
+        surname_tokens.insert(0, tokens[i])
+        i -= 1
+    return " ".join(surname_tokens)
 
 
 def parse(file_bytes: bytes) -> dict[str, EmployeeRecord]:
@@ -130,8 +143,8 @@ def parse(file_bytes: bytes) -> dict[str, EmployeeRecord]:
             return
         records[code] = EmployeeRecord(
             employee_code=code,
-            surname=_surname_from_employee_name(fields["Employee name"]),
-            first_names=fields["Full names"].strip(),
+            surname=extract_surname(fields["Employee name"]),
+            first_names=extract_first_name(fields["Full names"]),
             id_number=_clean_id(fields["ID number"]),
             passport_number=fields["Passport number"].strip(),
             date_of_birth=_ddmmyyyy_to_yyyymmdd(fields["Date of birth"]),

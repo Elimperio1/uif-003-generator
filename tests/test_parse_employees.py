@@ -4,7 +4,7 @@ from uif.parse_employees import (
     _clean_id,
     _ddmmyyyy_to_yyyymmdd,
     _strip_decimal_suffix,
-    _surname_from_employee_name,
+    extract_surname,
     parse,
 )
 
@@ -59,9 +59,9 @@ def test_ddmmyyyy_conversion():
 
 
 def test_surname_strips_title_and_initials():
-    assert _surname_from_employee_name("Mr J Baardnes") == "Baardnes"
-    assert _surname_from_employee_name("S Anthorn") == "Anthorn"
-    assert _surname_from_employee_name("R van Wyk") == "van Wyk"
+    assert extract_surname("Mr J Baardnes") == "Baardnes"
+    assert extract_surname("S Anthorn") == "Anthorn"
+    assert extract_surname("R van Wyk") == "van Wyk"
 
 
 def test_parse_extracts_id_employee():
