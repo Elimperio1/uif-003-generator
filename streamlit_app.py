@@ -103,13 +103,32 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     letter-spacing: -0.015em !important;
 }
 
-/* File uploader: current Streamlit Cloud builds render an SVG icon with
-   a text label ("upload") AND the button's own text label in the same
-   button, overlapping. Hide the icon so only the text label is shown. */
-[data-testid="stFileUploader"] button svg,
-[data-testid="stFileUploaderDropzone"] svg,
-[data-testid="stFileUploaderDropzoneInstructions"] svg {
+/* File uploader: current Streamlit Cloud renders two stacked text spans
+   ("upload" twice) inside the button, overlapping. Hide all the button's
+   native content and overlay a clean label via a pseudo-element. */
+[data-testid="stFileUploader"] button {
+    font-size: 0 !important;
+    background: var(--bg) !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 8px !important;
+    padding: 0.55rem 1.1rem !important;
+    transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+                background 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+[data-testid="stFileUploader"] button > * {
     display: none !important;
+}
+[data-testid="stFileUploader"] button::before {
+    content: "Choose file" !important;
+    font-family: 'Inter', system-ui, sans-serif !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    color: var(--text) !important;
+    letter-spacing: 0 !important;
+}
+[data-testid="stFileUploader"] button:hover {
+    border-color: var(--accent) !important;
+    background: oklch(0.96 0.018 70) !important;
 }
 
 /* Inputs: clean focus rings ------------------------------------------------*/
