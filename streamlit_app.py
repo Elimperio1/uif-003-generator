@@ -103,9 +103,14 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     letter-spacing: -0.015em !important;
 }
 
-/* File uploader: leave Streamlit's internal markup alone. Touching the
-   nested <section> AND the dropzone testid at the same time was layering
-   the dashed border over itself and overlapping the icon/button text. */
+/* File uploader: current Streamlit Cloud builds render an SVG icon with
+   a text label ("upload") AND the button's own text label in the same
+   button, overlapping. Hide the icon so only the text label is shown. */
+[data-testid="stFileUploader"] button svg,
+[data-testid="stFileUploaderDropzone"] svg,
+[data-testid="stFileUploaderDropzoneInstructions"] svg {
+    display: none !important;
+}
 
 /* Inputs: clean focus rings ------------------------------------------------*/
 [data-testid="stTextInput"] input,
