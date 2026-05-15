@@ -1,5 +1,7 @@
 """Unit tests for uif.generate_003."""
 
+from decimal import Decimal
+
 from uif.generate_003 import _fmt, build, employee_figures, included_for_month
 from uif.models import Company, EmployeeRecord, MatchedRecord, YtdRecord
 
@@ -64,7 +66,7 @@ def test_employee_figures_uncapped():
     assert gross == 9933.52
     assert remuneration == 9933.52
     # round(99.3352, 2) = 99.34 ; 99.34 * 2 = 198.68 (NOT 198.67)
-    assert uif_total == 198.68
+    assert uif_total == Decimal("198.68")
 
 
 def test_employee_figures_capped_at_17712():
@@ -78,7 +80,7 @@ def test_employee_figures_capped_at_17712():
     gross, remuneration, uif_total = employee_figures(record, "February")
     assert gross == 39220.00
     assert remuneration == 17712.00
-    assert uif_total == 354.24
+    assert uif_total == Decimal("354.24")
 
 
 def test_included_for_month_excludes_zero_earners():

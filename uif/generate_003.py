@@ -7,18 +7,40 @@ Format and rules are verified against the real Sage samples 20440843.003
 
 from __future__ import annotations
 
+from decimal import ROUND_HALF_UP, Decimal
+
 from .models import (
     DEFAULT_STATUS_CODE,
     STATUS_CODE,
     TERMINATED_STATUSES,
-    UIF_RATE_PER_SIDE,
     UIF_REMUNERATION_CAP,
     Company,
     MatchedRecord,
 )
 
 
-def _fmt(value: float) -> str:
+def compute_uif_total(remunerable) -> Decimal:
+    """
+    Compute the combined UIF contribution (employee 1% + employer 1%) on
+    a remunerable amount, matching Sage: round each half independently
+    using ROUND_HALF_UP, then sum.
+
+    Args:
+        remunerable: The remunerable amount (field 8310) — already capped
+            at R17,712.00 if applicable. Accepts Decimal, float, int, or
+            numeric string.
+
+    Returns:
+        Decimal with exactly 2 decimal places, for field 8320.
+    """
+    rem = Decimal(str(remunerable))
+    one_percent = (rem * Decimal("0.01")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    return one_percent + one_percent
+
+
+def _fmt(value) -> str:
     """Two decimals, but a trailing '.00' is dropped ('11550', '6232.80')."""
     text = f"{value:.2f}"
     return text[:-3] if text.endswith(".00") else text
@@ -33,12 +55,11 @@ def _code_sort_key(record: MatchedRecord):
     return (0, int(code)) if code.isdigit() else (1, code)
 
 
-def employee_figures(record: MatchedRecord, month: str) -> tuple[float, float, float]:
+def employee_figures(record: MatchedRecord, month: str) -> tuple[float, float, Decimal]:
     """Return (gross 8300, remuneration 8310, uif total 8320) for one month."""
     gross = record.ytd.gross(month)
     remuneration = min(record.ytd.remunerable(month), UIF_REMUNERATION_CAP)
-    employee_side = round(remuneration * UIF_RATE_PER_SIDE, 2)
-    uif_total = round(employee_side * 2, 2)
+    uif_total = compute_uif_total(f"{remuneration:.2f}")
     return gross, remuneration, uif_total
 
 
@@ -74,7 +95,8 @@ def build(
         "8070", period_yyyymm,
     ]))
 
-    sum_gross = sum_remuneration = sum_uif = 0.0
+    sum_gross = sum_remuneration = 0.0
+    sum_uif: Decimal = Decimal("0.00")
     for record in included:
         emp = record.employee
         gross, remuneration, uif_total = employee_figures(record, month)
@@ -112,7 +134,7 @@ def build(
         "8120", company.paye_ref,
         "8130", _fmt(round(sum_gross, 2)),
         "8135", _fmt(round(sum_remuneration, 2)),
-        "8140", _fmt(round(sum_uif, 2)),
+        "8140", _fmt(sum_uif),
         "8150", str(len(included)),
         "8160", _q(company.contact_email_footer),
     ]))
