@@ -71,17 +71,67 @@ def _value_for(row: list[str], label: str) -> str:
     return ""
 
 
-def _strip_decimal_suffix(value: str) -> str:
-    """'32.00' -> '32', '8306056177085.00' -> '8306056177085'."""
-    return value.split(".")[0].strip()
+def _normalise_numeric_string(value) -> str:
+    """
+    Normalise any numeric string format we've seen from Sage CSVs into a
+    canonical integer-digit string. Handles:
+      - bare int:           "32"            -> "32"
+      - decimal suffix:     "32.00"         -> "32"
+      - leading zeros:      "0101166305082" -> "0101166305082" (preserved as text)
+      - scientific notation:"8.30606E+12"   -> "8306060000000"
+      - blank/None:                          -> ""
+
+    Note: for SA IDs that have already been corrupted by Excel's scientific
+    notation, the expanded form will contain trailing zeros — that's the
+    exact signature `is_corrupted_sa_id` looks for, so corruption stays
+    detectable downstream.
+    """
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    # Already a plain digit string (possibly with a leading zero we must keep)
+    if s.isdigit():
+        return s
+    # Try float-then-int conversion for ".00" suffixes and scientific notation
+    try:
+        f = float(s)
+    except ValueError:
+        # Not a numeric form at all — fall back to digit-only extraction
+        return "".join(c for c in s if c.isdigit())
+    if f != f or f == float("inf") or f == float("-inf"):  # NaN/inf guard
+        return ""
+    # Convert to int and back to string. This expands scientific notation
+    # like "8.30606E+12" -> "8306060000000" (which the corruption detector
+    # will then catch via its trailing-zeros heuristic).
+    return str(int(f))
 
 
-def _clean_id(value: str) -> str:
-    """Digits only, left-padded to 13. Excel can drop the leading zero."""
-    digits = re.sub(r"\D", "", _strip_decimal_suffix(value))
+def parse_employee_code(value) -> str:
+    """Employee code as a normalised integer string (no leading zeros,
+    since YTD codes don't have them — keeps both sides of the join in sync)."""
+    digits = _normalise_numeric_string(value)
+    return digits.lstrip("0") or "0" if digits else ""
+
+
+def parse_id_number(value) -> str:
+    """
+    SA ID number as a 13-digit string, preserving leading zeros (e.g.
+    `0101166305082`). Pads with leading zeros if a leading-zero ID lost
+    one or more during Excel's numeric coercion (a `0101166305082` ID
+    arrives as `101166305082` because Excel dropped the leading 0).
+    Does NOT validate; corruption detection is a separate concern.
+    """
+    digits = _normalise_numeric_string(value)
     if not digits:
         return ""
-    return digits.zfill(13) if len(digits) <= 13 else digits
+    # If it looks like a not-quite-13-digit SA ID, left-pad. We only pad
+    # if the result is plausibly an SA ID (12 or 13 digits); other
+    # lengths get returned as-is so other validation can flag them.
+    if len(digits) in (12, 13):
+        return digits.zfill(13)
+    return digits
 
 
 def _ddmmyyyy_to_yyyymmdd(value: str) -> str:
@@ -138,14 +188,14 @@ def parse(file_bytes: bytes) -> dict[str, EmployeeRecord]:
                     break
             fields.setdefault(label, "")
 
-        code = _strip_decimal_suffix(fields["Employee code"])
+        code = parse_employee_code(fields["Employee code"])
         if not code:
             return
         records[code] = EmployeeRecord(
             employee_code=code,
             surname=extract_surname(fields["Employee name"]),
             first_names=extract_first_name(fields["Full names"]),
-            id_number=_clean_id(fields["ID number"]),
+            id_number=parse_id_number(fields["ID number"]),
             passport_number=fields["Passport number"].strip(),
             date_of_birth=_ddmmyyyy_to_yyyymmdd(fields["Date of birth"]),
             date_engaged=_ddmmyyyy_to_yyyymmdd(fields["Date Engaged"]),

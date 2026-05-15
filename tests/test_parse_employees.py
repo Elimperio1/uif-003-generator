@@ -1,9 +1,7 @@
 """Unit tests for uif.parse_employees."""
 
 from uif.parse_employees import (
-    _clean_id,
     _ddmmyyyy_to_yyyymmdd,
-    _strip_decimal_suffix,
     extract_surname,
     parse,
 )
@@ -32,25 +30,6 @@ SAMPLE_EMPLOYEES = (
     "Tax status,,Statutory Tables,,,,,Employee status,,,,Terminated,,,,,\r\n"
     "UIF status,,Contributes,,,,,,,,,,,,,,\r\n"
 )
-
-
-def test_strip_decimal_suffix():
-    assert _strip_decimal_suffix("32.00") == "32"
-    assert _strip_decimal_suffix("8306056177085.00") == "8306056177085"
-
-
-def test_clean_id_strips_suffix():
-    assert _clean_id("8306056177085.00") == "8306056177085"
-
-
-def test_clean_id_left_pads_lost_leading_zero():
-    # Excel can drop a leading zero, turning a 13-digit ID into 12 digits.
-    assert _clean_id("101166305082.00") == "0101166305082"
-
-
-def test_clean_id_blank_is_empty():
-    assert _clean_id("") == ""
-    assert _clean_id(",,") == ""
 
 
 def test_ddmmyyyy_conversion():

@@ -24,6 +24,7 @@ import io
 import re
 
 from .models import TAX_YEAR_MONTHS, YtdRecord
+from .parse_employees import parse_employee_code
 
 _SECTION_HEADERS = {
     "Earnings", "Deductions", "Company Contributions",
@@ -111,7 +112,7 @@ def parse(file_bytes: bytes) -> dict[str, YtdRecord]:
             break
 
         if first == "Employee code:":
-            code = row[1].strip() if len(row) > 1 else ""
+            code = parse_employee_code(row[1] if len(row) > 1 else "")
             name = row[5].strip() if len(row) > 5 else ""
             current = YtdRecord(
                 employee_code=code,
