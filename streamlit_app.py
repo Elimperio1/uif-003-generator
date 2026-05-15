@@ -28,16 +28,16 @@ st.set_page_config(
 
 _STYLES = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
 :root {
-    --bg:           oklch(0.97 0.008 75);
-    --bg-soft:      oklch(0.94 0.012 75);
-    --text:         oklch(0.22 0.012 60);
-    --text-muted:   oklch(0.45 0.015 60);
-    --accent:       oklch(0.62 0.14 65);
-    --accent-deep:  oklch(0.50 0.16 60);
-    --line:         oklch(0.88 0.015 70);
+    --bg:           oklch(1 0 0);
+    --bg-soft:      oklch(0.97 0.012 250);
+    --text:         oklch(0.18 0.05 260);
+    --text-muted:   oklch(0.45 0.06 255);
+    --accent:       oklch(0.42 0.10 255);
+    --accent-deep:  oklch(0.32 0.10 255);
+    --line:         oklch(0.92 0.012 250);
 }
 
 html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
@@ -45,89 +45,93 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
 }
 
 /* Body-level font + colour so it INHERITS naturally to descendants.
-   A universal `*` selector forces Inter onto Material Icons spans too,
+   A universal `*` selector forces the font onto Material Icons spans too,
    which makes their icon-name leak out as plain text ("upload",
    "arrow_right" etc). Inheritance lets icon fonts keep their own font. */
 body, [data-testid="stAppViewContainer"] {
-    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Lora', Georgia, 'Times New Roman', serif;
     color: var(--text);
 }
 
 /* Wordmark and identity ----------------------------------------------------*/
 .wordmark {
-    font-family: 'Fraunces', Georgia, serif;
-    font-size: clamp(2.6rem, 5.5vw, 4.25rem);
-    font-weight: 500;
-    letter-spacing: -0.035em;
-    line-height: 0.95;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(2.8rem, 5.5vw, 4.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.0;
     color: var(--text);
     margin: 1.5rem 0 0.4rem 0;
 }
 .wordmark em {
     font-style: italic;
-    font-weight: 400;
-    color: var(--accent-deep);
+    font-weight: 500;
+    color: var(--accent);
 }
 .tagline {
-    font-family: 'Inter', sans-serif;
-    font-size: 1.05rem;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 1.1rem;
     color: var(--text-muted);
     max-width: 60ch;
     margin: 0 0 2rem 0;
-    line-height: 1.5;
+    line-height: 1.55;
 }
 
 /* Section headers ----------------------------------------------------------*/
 .section-eyebrow {
-    font-family: 'Inter', sans-serif;
-    font-size: 0.72rem;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.75rem;
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--accent-deep);
-    margin: 2.5rem 0 0.25rem 0;
+    color: var(--accent);
+    margin: 2.5rem 0 0.35rem 0;
 }
 .section-title {
-    font-family: 'Fraunces', Georgia, serif;
-    font-size: 1.75rem;
-    font-weight: 500;
-    letter-spacing: -0.015em;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.95rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--text);
     margin: 0 0 1rem 0;
     line-height: 1.15;
 }
 
-/* Streamlit markdown headings get the Fraunces treatment too --------------*/
+/* Streamlit markdown headings get the Playfair treatment too --------------*/
 [data-testid="stMarkdownContainer"] h1,
 [data-testid="stMarkdownContainer"] h2,
 [data-testid="stMarkdownContainer"] h3 {
-    font-family: 'Fraunces', Georgia, serif !important;
-    font-weight: 500 !important;
-    letter-spacing: -0.015em !important;
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
 }
 
-/* File uploader: bump the label size so each upload zone is obvious. */
+/* File uploader: prominent Playfair label so each upload zone is obvious. */
 [data-testid="stFileUploader"] [data-testid="stWidgetLabel"],
+[data-testid="stFileUploader"] [data-testid="stWidgetLabel"] *,
 [data-testid="stFileUploader"] label,
 [data-testid="stFileUploader"] > label {
-    font-size: 1.1rem !important;
+    font-family: 'Playfair Display', Georgia, serif !important;
+    font-size: 1.35rem !important;
     font-weight: 600 !important;
     color: var(--text) !important;
-    margin-bottom: 0.4rem !important;
+    margin-bottom: 0.5rem !important;
+    letter-spacing: -0.005em !important;
 }
 
 /* Inputs: clean focus rings ------------------------------------------------*/
 [data-testid="stTextInput"] input,
 [data-testid="stSelectbox"] div[role="combobox"],
 .stTextInput input {
-    border-radius: 8px !important;
+    border-radius: 6px !important;
     border-color: var(--line) !important;
     background: var(--bg-soft) !important;
+    font-family: 'Lora', Georgia, serif !important;
 }
 [data-testid="stTextInput"] input:focus,
 .stTextInput input:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 2px oklch(0.62 0.14 65 / 0.18) !important;
+    box-shadow: 0 0 0 2px oklch(0.42 0.10 255 / 0.18) !important;
 }
 
 /* Buttons: accent emphasis for the download action only. Avoid the broader
@@ -136,30 +140,33 @@ body, [data-testid="stAppViewContainer"] {
 [data-testid="stDownloadButton"] button {
     background: var(--accent-deep) !important;
     color: white !important;
+    font-family: 'Playfair Display', Georgia, serif !important;
     font-weight: 600 !important;
-    letter-spacing: 0.005em !important;
+    font-size: 1.05rem !important;
+    letter-spacing: 0.01em !important;
     border: none !important;
-    border-radius: 10px !important;
-    padding: 0.7rem 1.6rem !important;
+    border-radius: 6px !important;
+    padding: 0.75rem 1.8rem !important;
     transition: background 180ms cubic-bezier(0.22, 1, 0.36, 1),
                 transform 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 [data-testid="stDownloadButton"] button:hover {
-    background: oklch(0.42 0.16 55) !important;
+    background: oklch(0.22 0.10 260) !important;
     transform: translateY(-1px);
 }
 
 /* Multiselect chips --------------------------------------------------------*/
 [data-baseweb="tag"] {
-    background: oklch(0.92 0.04 70) !important;
+    background: oklch(0.94 0.04 255) !important;
     color: var(--accent-deep) !important;
-    border-radius: 6px !important;
+    border-radius: 4px !important;
     font-weight: 500 !important;
+    font-family: 'Lora', Georgia, serif !important;
 }
 
 /* Expander headers ---------------------------------------------------------*/
 details summary {
-    font-family: 'Inter', sans-serif !important;
+    font-family: 'Lora', Georgia, serif !important;
     font-weight: 500 !important;
     color: var(--text) !important;
 }
@@ -191,8 +198,8 @@ hr {
 
 /* Footer note style --------------------------------------------------------*/
 .fineprint {
-    font-family: 'Inter', sans-serif;
-    font-size: 0.85rem;
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.9rem;
     color: var(--text-muted);
     margin-top: 3rem;
     padding-top: 1.5rem;
@@ -204,7 +211,7 @@ st.markdown(_STYLES, unsafe_allow_html=True)
 
 
 def section(eyebrow: str, title: str) -> None:
-    """Render a typographic section header (eyebrow + Fraunces title)."""
+    """Render a typographic section header (eyebrow + Playfair title)."""
     st.markdown(
         f'<div class="section-eyebrow">{eyebrow}</div>'
         f'<h2 class="section-title">{title}</h2>',
