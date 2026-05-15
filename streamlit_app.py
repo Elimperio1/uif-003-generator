@@ -44,8 +44,11 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     background: var(--bg);
 }
 
-[data-testid="stAppViewContainer"] *, .stMarkdown, .stMarkdown p,
-.stMarkdown li, [data-testid="stWidgetLabel"] {
+/* Body-level font + colour so it INHERITS naturally to descendants.
+   A universal `*` selector forces Inter onto Material Icons spans too,
+   which makes their icon-name leak out as plain text ("upload",
+   "arrow_right" etc). Inheritance lets icon fonts keep their own font. */
+body, [data-testid="stAppViewContainer"] {
     font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     color: var(--text);
 }
@@ -103,32 +106,14 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     letter-spacing: -0.015em !important;
 }
 
-/* File uploader: current Streamlit Cloud renders two stacked text spans
-   ("upload" twice) inside the button, overlapping. Hide all the button's
-   native content and overlay a clean label via a pseudo-element. */
-[data-testid="stFileUploader"] button {
-    font-size: 0 !important;
-    background: var(--bg) !important;
-    border: 1px solid var(--line) !important;
-    border-radius: 8px !important;
-    padding: 0.55rem 1.1rem !important;
-    transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
-                background 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
-}
-[data-testid="stFileUploader"] button > * {
-    display: none !important;
-}
-[data-testid="stFileUploader"] button::before {
-    content: "Choose file" !important;
-    font-family: 'Inter', system-ui, sans-serif !important;
-    font-size: 0.875rem !important;
-    font-weight: 500 !important;
+/* File uploader: bump the label size so each upload zone is obvious. */
+[data-testid="stFileUploader"] [data-testid="stWidgetLabel"],
+[data-testid="stFileUploader"] label,
+[data-testid="stFileUploader"] > label {
+    font-size: 1.1rem !important;
+    font-weight: 600 !important;
     color: var(--text) !important;
-    letter-spacing: 0 !important;
-}
-[data-testid="stFileUploader"] button:hover {
-    border-color: var(--accent) !important;
-    background: oklch(0.96 0.018 70) !important;
+    margin-bottom: 0.4rem !important;
 }
 
 /* Inputs: clean focus rings ------------------------------------------------*/
