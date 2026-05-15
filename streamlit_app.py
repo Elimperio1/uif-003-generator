@@ -103,20 +103,9 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     letter-spacing: -0.015em !important;
 }
 
-/* File uploader: distinctive drop zone -------------------------------------*/
-[data-testid="stFileUploader"] section,
-[data-testid="stFileUploaderDropzone"] {
-    background: var(--bg-soft);
-    border: 1.5px dashed var(--line);
-    border-radius: 14px;
-    transition: border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
-                background 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-[data-testid="stFileUploader"] section:hover,
-[data-testid="stFileUploaderDropzone"]:hover {
-    border-color: var(--accent);
-    background: oklch(0.96 0.018 70);
-}
+/* File uploader: leave Streamlit's internal markup alone. Touching the
+   nested <section> AND the dropzone testid at the same time was layering
+   the dashed border over itself and overlapping the icon/button text. */
 
 /* Inputs: clean focus rings ------------------------------------------------*/
 [data-testid="stTextInput"] input,
@@ -132,9 +121,10 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     box-shadow: 0 0 0 2px oklch(0.62 0.14 65 / 0.18) !important;
 }
 
-/* Buttons: accent emphasis for primary actions ----------------------------*/
-[data-testid="stDownloadButton"] button,
-[data-testid="baseButton-primary"] {
+/* Buttons: accent emphasis for the download action only. Avoid the broader
+   primary-button testid because Streamlit reuses it for the file uploader's
+   own controls in some versions. */
+[data-testid="stDownloadButton"] button {
     background: var(--accent-deep) !important;
     color: white !important;
     font-weight: 600 !important;
@@ -145,8 +135,7 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
     transition: background 180ms cubic-bezier(0.22, 1, 0.36, 1),
                 transform 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
-[data-testid="stDownloadButton"] button:hover,
-[data-testid="baseButton-primary"]:hover {
+[data-testid="stDownloadButton"] button:hover {
     background: oklch(0.42 0.16 55) !important;
     transform: translateY(-1px);
 }
