@@ -1,9 +1,9 @@
 """
-UIF 003 Generator — Streamlit app entry point.
+UIF-ektief — Streamlit app entry point.
 
-Gates access behind a shared password, takes the two Sage CSV exports plus a
-company-config form, and produces one or more downloadable SARS UIF
-declaration files — one per selected month of the tax year.
+Takes two Sage CSV exports plus a company-config form and produces one or more
+downloadable SARS UIF declaration files, one per selected month of the tax year.
+No authentication: the app is stateless and processes everything in memory.
 """
 
 import io
@@ -16,40 +16,207 @@ from uif import generate_003, match, parse_employees, parse_ytd, validate
 from uif.models import TAX_YEAR_MONTHS, Company, period_code
 
 st.set_page_config(
-    page_title="UIF 003 Generator",
-    page_icon="📄",
+    page_title="UIF-ektief",
+    page_icon="✦",
     layout="centered",
 )
 
 
-def _password_entered() -> None:
-    if st.session_state.get("password", "") == st.secrets.get("password", ""):
-        st.session_state["password_correct"] = True
-        del st.session_state["password"]
-    else:
-        st.session_state["password_correct"] = False
+# ---------------------------------------------------------------------------
+# Visual layer
+# ---------------------------------------------------------------------------
+
+_STYLES = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+    --bg:           oklch(0.97 0.008 75);
+    --bg-soft:      oklch(0.94 0.012 75);
+    --text:         oklch(0.22 0.012 60);
+    --text-muted:   oklch(0.45 0.015 60);
+    --accent:       oklch(0.62 0.14 65);
+    --accent-deep:  oklch(0.50 0.16 60);
+    --line:         oklch(0.88 0.015 70);
+}
+
+html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+    background: var(--bg);
+}
+
+[data-testid="stAppViewContainer"] *, .stMarkdown, .stMarkdown p,
+.stMarkdown li, [data-testid="stWidgetLabel"] {
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+}
+
+/* Wordmark and identity ----------------------------------------------------*/
+.wordmark {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: clamp(2.6rem, 5.5vw, 4.25rem);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+    color: var(--text);
+    margin: 1.5rem 0 0.4rem 0;
+}
+.wordmark em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent-deep);
+}
+.tagline {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.05rem;
+    color: var(--text-muted);
+    max-width: 60ch;
+    margin: 0 0 2rem 0;
+    line-height: 1.5;
+}
+
+/* Section headers ----------------------------------------------------------*/
+.section-eyebrow {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+    margin: 2.5rem 0 0.25rem 0;
+}
+.section-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 1.75rem;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+    color: var(--text);
+    margin: 0 0 1rem 0;
+    line-height: 1.15;
+}
+
+/* Streamlit markdown headings get the Fraunces treatment too --------------*/
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3 {
+    font-family: 'Fraunces', Georgia, serif !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.015em !important;
+}
+
+/* File uploader: distinctive drop zone -------------------------------------*/
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploaderDropzone"] {
+    background: var(--bg-soft);
+    border: 1.5px dashed var(--line);
+    border-radius: 14px;
+    transition: border-color 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                background 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-testid="stFileUploader"] section:hover,
+[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: var(--accent);
+    background: oklch(0.96 0.018 70);
+}
+
+/* Inputs: clean focus rings ------------------------------------------------*/
+[data-testid="stTextInput"] input,
+[data-testid="stSelectbox"] div[role="combobox"],
+.stTextInput input {
+    border-radius: 8px !important;
+    border-color: var(--line) !important;
+    background: var(--bg-soft) !important;
+}
+[data-testid="stTextInput"] input:focus,
+.stTextInput input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px oklch(0.62 0.14 65 / 0.18) !important;
+}
+
+/* Buttons: accent emphasis for primary actions ----------------------------*/
+[data-testid="stDownloadButton"] button,
+[data-testid="baseButton-primary"] {
+    background: var(--accent-deep) !important;
+    color: white !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.005em !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 0.7rem 1.6rem !important;
+    transition: background 180ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 180ms cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+[data-testid="stDownloadButton"] button:hover,
+[data-testid="baseButton-primary"]:hover {
+    background: oklch(0.42 0.16 55) !important;
+    transform: translateY(-1px);
+}
+
+/* Multiselect chips --------------------------------------------------------*/
+[data-baseweb="tag"] {
+    background: oklch(0.92 0.04 70) !important;
+    color: var(--accent-deep) !important;
+    border-radius: 6px !important;
+    font-weight: 500 !important;
+}
+
+/* Expander headers ---------------------------------------------------------*/
+details summary {
+    font-family: 'Inter', sans-serif !important;
+    font-weight: 500 !important;
+    color: var(--text) !important;
+}
+
+/* Alerts: tuned to palette -------------------------------------------------*/
+[data-baseweb="notification"] {
+    border-radius: 10px !important;
+    border: 1px solid var(--line) !important;
+}
+
+/* Hairline rules between major sections -----------------------------------*/
+hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 2.5rem 0 0 0;
+}
+
+/* Tighten Streamlit's default top padding so the wordmark lands well ------*/
+.block-container {
+    padding-top: 2.5rem !important;
+}
+
+/* Dataframe: lift slightly, no harsh borders ------------------------------*/
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Footer note style --------------------------------------------------------*/
+.fineprint {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+}
+</style>
+"""
+st.markdown(_STYLES, unsafe_allow_html=True)
 
 
-def require_password() -> bool:
-    """Return True only once the user has entered the correct shared password."""
-    if st.session_state.get("password_correct"):
-        return True
-
-    st.title("UIF 003 Generator")
-    st.text_input(
-        "Password",
-        type="password",
-        on_change=_password_entered,
-        key="password",
+def section(eyebrow: str, title: str) -> None:
+    """Render a typographic section header (eyebrow + Fraunces title)."""
+    st.markdown(
+        f'<div class="section-eyebrow">{eyebrow}</div>'
+        f'<h2 class="section-title">{title}</h2>',
+        unsafe_allow_html=True,
     )
-    if st.session_state.get("password_correct") is False:
-        st.error("Incorrect password.")
-    return False
 
 
-if not require_password():
-    st.stop()
-
+# ---------------------------------------------------------------------------
+# Parsing (cached on file bytes)
+# ---------------------------------------------------------------------------
 
 @st.cache_data(show_spinner=False)
 def _parse_ytd(data: bytes):
@@ -61,75 +228,107 @@ def _parse_employees(data: bytes):
     return parse_employees.parse(data)
 
 
-st.title("UIF 003 Generator")
+# ---------------------------------------------------------------------------
+# Header
+# ---------------------------------------------------------------------------
 
 st.markdown(
-    """
-Generates SARS UIF declaration files for one or more months of a South African
-tax year, using two CSV exports from Sage.
-
-### What to upload
-
-1. **Year to Date Detail** (the payroll CSV) — exported as-is from Sage.
-2. **Employee Details** (the master CSV with ID/passport numbers) — **open this
-   one in Excel first**, click on column B, set the cell format to **Number**
-   with 0 decimals, then save. This forces SA ID numbers to export with full
-   precision instead of being mangled into scientific notation.
-
-Both CSVs must be for **the same company and the same tax year**.
-"""
+    '<h1 class="wordmark">UIF<em>-ektief</em></h1>'
+    '<p class="tagline">SARS UIF declaration files for the months Sage will not '
+    "regenerate. Drop in two CSV exports, fill the company details once, pick "
+    "the months you need, download.</p>",
+    unsafe_allow_html=True,
 )
 
-st.divider()
+# ---------------------------------------------------------------------------
+# Upload section
+# ---------------------------------------------------------------------------
 
-col1, col2 = st.columns(2)
+section("Step 1", "Drop in the Sage exports")
+
+st.markdown(
+    "Both files must be from the **same company and same tax year**. Before "
+    "uploading the Employee Details CSV, open it in Excel, format column B as "
+    "**Number** with 0 decimals, and save. That stops Excel mangling SA ID "
+    "numbers into scientific notation."
+)
+
+col1, col2 = st.columns(2, gap="large")
 with col1:
-    ytd_file = st.file_uploader("Year to Date Detail CSV", type=["csv"], key="ytd_upload")
+    ytd_file = st.file_uploader(
+        "Year to Date Detail",
+        type=["csv"],
+        key="ytd_upload",
+        help="The payroll YTD report exported from Sage.",
+    )
 with col2:
-    emp_file = st.file_uploader("Employee Details CSV", type=["csv"], key="emp_upload")
-
-st.divider()
+    emp_file = st.file_uploader(
+        "Employee Details",
+        type=["csv"],
+        key="emp_upload",
+        help="The employee master report with ID/passport numbers, DOBs, dates.",
+    )
 
 if not (ytd_file and emp_file):
-    st.info("Upload both CSVs to continue.")
+    st.markdown(
+        '<p class="fineprint">Waiting for both files. Nothing leaves your '
+        "browser session. The app holds the data in memory and discards it "
+        "when you close the tab.</p>",
+        unsafe_allow_html=True,
+    )
     st.stop()
 
-# --- Parse -----------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Parse + match
+# ---------------------------------------------------------------------------
+
 try:
     ytd_data, tax_year_end = _parse_ytd(ytd_file.getvalue())
-except Exception as exc:  # noqa: BLE001 - surface any parse failure to the user
-    st.error(f"Could not parse the Year to Date Detail CSV: {exc}")
+except Exception as exc:  # noqa: BLE001
+    st.error(f"Could not read the Year to Date Detail CSV: {exc}")
     st.stop()
 
 try:
     emp_data = _parse_employees(emp_file.getvalue())
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not parse the Employee Details CSV: {exc}")
+    st.error(f"Could not read the Employee Details CSV: {exc}")
     st.stop()
 
 matched, match_warnings = match.join(ytd_data, emp_data)
 
-st.success(
-    f"Parsed {len(ytd_data)} employees from the Year to Date Detail and "
-    f"{len(emp_data)} from the Employee Details report. "
-    f"Tax year ending February {tax_year_end}."
+st.markdown(
+    f"<p style='margin-top:1.25rem;color:var(--text-muted);'>"
+    f"Read <strong style='color:var(--text);'>{len(ytd_data)}</strong> "
+    f"employees from the YTD report and "
+    f"<strong style='color:var(--text);'>{len(emp_data)}</strong> from the "
+    f"Employee Details report. Tax year ending February "
+    f"<strong style='color:var(--text);'>{tax_year_end}</strong>.</p>",
+    unsafe_allow_html=True,
 )
 for warning in match_warnings:
     st.warning(warning)
 
-# --- Company / filer details ----------------------------------------------
-st.subheader("Company / filer details")
-cfg_left, cfg_right = st.columns(2)
+# ---------------------------------------------------------------------------
+# Company / filer details
+# ---------------------------------------------------------------------------
+
+section("Step 2", "Company and filer details")
+
+cfg_left, cfg_right = st.columns(2, gap="large")
 uif_ref = cfg_left.text_input("UIF reference number", key="uif_ref")
 paye_ref = cfg_right.text_input("PAYE reference number", key="paye_ref")
 contact_name = cfg_left.text_input("Filer contact name", key="contact_name")
 contact_phone = cfg_right.text_input("Filer contact phone", key="contact_phone")
 email_header = cfg_left.text_input("Contact email (file header)", key="email_header")
 email_footer = cfg_right.text_input(
-    "Contact email (file footer — defaults to header)", key="email_footer"
+    "Contact email (file footer, defaults to header)", key="email_footer"
 )
-submission_mode = cfg_left.selectbox("Submission mode", ["LIVE", "TEST"], key="submission_mode")
-file_extension = cfg_right.text_input("Output file extension", value="003", key="file_extension")
+submission_mode = cfg_left.selectbox(
+    "Submission mode", ["LIVE", "TEST"], key="submission_mode"
+)
+file_extension = cfg_right.text_input(
+    "Output file extension", value="003", key="file_extension"
+)
 
 _required = {
     "UIF reference number": uif_ref,
@@ -140,7 +339,7 @@ _required = {
 }
 _missing = [name for name, value in _required.items() if not value.strip()]
 if _missing:
-    st.info("Fill in the company details to continue: " + ", ".join(_missing) + ".")
+    st.info("Still need: " + ", ".join(_missing) + ".")
     st.stop()
 
 company = Company(
@@ -154,10 +353,14 @@ company = Company(
     file_extension=file_extension.strip() or "003",
 )
 
-# --- Month selection -------------------------------------------------------
-st.subheader("Months to generate")
+# ---------------------------------------------------------------------------
+# Month selection
+# ---------------------------------------------------------------------------
+
+section("Step 3", "Pick the months")
+
 months = st.multiselect(
-    "Select the month(s) you need declaration files for",
+    "Each selected month produces one declaration file.",
     TAX_YEAR_MONTHS,
     key="months",
 )
@@ -165,11 +368,16 @@ if not months:
     st.info("Select at least one month.")
     st.stop()
 
-# --- Preview + validation --------------------------------------------------
-st.subheader("Preview")
-blocking_total: list[str] = []
+# ---------------------------------------------------------------------------
+# Preview + validation
+# ---------------------------------------------------------------------------
 
-for month in sorted(months, key=TAX_YEAR_MONTHS.index):
+section("Step 4", "Preview")
+
+blocking_total: list[str] = []
+ordered_months = sorted(months, key=TAX_YEAR_MONTHS.index)
+
+for month in ordered_months:
     period = period_code(month, tax_year_end)
     blocking, soft = validate.validate(matched, month)
     blocking_total.extend(blocking)
@@ -190,19 +398,23 @@ for month in sorted(months, key=TAX_YEAR_MONTHS.index):
                 "ID / Passport": (emp.id_number or emp.passport_number) if emp else "",
                 "Gross (8300)": gross,
                 "Remuneration (8310)": remuneration,
-                "UIF total (8320)": uif_total,
+                "UIF total (8320)": float(uif_total),
                 "Status": record.ytd.status,
             }
         )
 
     with st.expander(
-        f"{month} ({period}) — {len(included)} employee(s)",
+        f"{month} {period} — {len(included)} employee(s)",
         expanded=(len(months) == 1),
     ):
         if rows:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
-            st.write("No employees had earnings in this month.")
+            st.markdown(
+                "<p style='color:var(--text-muted);'>No employees had earnings "
+                "in this month.</p>",
+                unsafe_allow_html=True,
+            )
         for error in blocking:
             st.error(error)
         for warning in soft:
@@ -212,10 +424,13 @@ if blocking_total:
     st.error("Resolve the blocking errors above before files can be generated.")
     st.stop()
 
-# --- Generate + download ---------------------------------------------------
-st.subheader("Download")
+# ---------------------------------------------------------------------------
+# Generate + download
+# ---------------------------------------------------------------------------
+
+section("Step 5", "Download")
+
 ref_for_name = company.uif_ref.lstrip("0") or company.uif_ref
-ordered_months = sorted(months, key=TAX_YEAR_MONTHS.index)
 
 files: dict[str, bytes] = {}
 for month in ordered_months:
@@ -230,10 +445,11 @@ for month in ordered_months:
 if len(files) == 1:
     ((filename, content),) = files.items()
     st.download_button(
-        f"Download {filename}",
+        f"Download  {filename}",
         data=content,
         file_name=filename,
         mime="text/plain",
+        type="primary",
     )
 else:
     zip_buffer = io.BytesIO()
@@ -241,8 +457,15 @@ else:
         for filename, content in files.items():
             archive.writestr(filename, content)
     st.download_button(
-        f"Download {len(files)} declaration files (.zip)",
+        f"Download  {len(files)} files (zip)",
         data=zip_buffer.getvalue(),
         file_name=f"{ref_for_name}_uif_declarations.zip",
         mime="application/zip",
+        type="primary",
     )
+
+st.markdown(
+    '<p class="fineprint">Files are built in memory and never written to disk. '
+    "Close the tab and the data is gone.</p>",
+    unsafe_allow_html=True,
+)
