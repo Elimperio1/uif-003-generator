@@ -15,7 +15,6 @@ def _company() -> Company:
         contact_email_header="tax@elimperio.co.za",
         contact_email_footer="tax@elimperio.co.za",
         submission_mode="LIVE",
-        file_extension="003",
     )
 
 

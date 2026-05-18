@@ -331,9 +331,6 @@ email_footer = cfg_right.text_input(
 submission_mode = cfg_left.selectbox(
     "Submission mode", ["LIVE", "TEST"], key="submission_mode"
 )
-file_extension = cfg_right.text_input(
-    "Output file extension", value="003", key="file_extension"
-)
 
 _required = {
     "UIF reference number": uif_ref,
@@ -355,7 +352,6 @@ company = Company(
     contact_email_header=email_header.strip(),
     contact_email_footer=email_footer.strip() or email_header.strip(),
     submission_mode=submission_mode,
-    file_extension=file_extension.strip() or "003",
 )
 
 # ---------------------------------------------------------------------------
@@ -435,16 +431,13 @@ if blocking_total:
 
 section("Step 5", "Download")
 
-ref_for_name = company.uif_ref.lstrip("0") or company.uif_ref
+stripped_ref = company.uif_ref.lstrip("0") or company.uif_ref
 
 files: dict[str, bytes] = {}
-for month in ordered_months:
+for sequence, month in enumerate(ordered_months, start=1):
     period = period_code(month, tax_year_end)
     content = generate_003.build(matched, month, period, company)
-    if len(ordered_months) == 1:
-        filename = f"{ref_for_name}.{company.file_extension}"
-    else:
-        filename = f"{ref_for_name}_{period}.{company.file_extension}"
+    filename = generate_003.build_filename(company.uif_ref, sequence)
     files[filename] = content
 
 if len(files) == 1:
@@ -457,6 +450,9 @@ if len(files) == 1:
         type="primary",
     )
 else:
+    first_period = period_code(ordered_months[0], tax_year_end)
+    last_period = period_code(ordered_months[-1], tax_year_end)
+    zip_filename = f"{stripped_ref}-uif-{first_period}-to-{last_period}.zip"
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for filename, content in files.items():
@@ -464,7 +460,7 @@ else:
     st.download_button(
         f"Download  {len(files)} files (zip)",
         data=zip_buffer.getvalue(),
-        file_name=f"{ref_for_name}_uif_declarations.zip",
+        file_name=zip_filename,
         mime="application/zip",
         type="primary",
     )

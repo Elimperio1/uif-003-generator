@@ -18,10 +18,13 @@ String values are double-quoted; numeric values are not.
 
 ## Filename
 
-`<UIF reference number with leading zeros stripped>.<extension>` — e.g.
-`20440843.003`. The 2024 sample is `.003` and the 2025 sample is `.004`,
-suggesting an incrementing submission counter; the app exposes the extension as
-a config field defaulting to `003`.
+`<UIF reference number with leading zeros stripped>.<NNN>`, where `NNN` is the
+file's 1-indexed position within the current generation batch, zero-padded to
+three digits. Batches are ordered by tax-year month (March first, February
+last). Generating a single month produces `<ref>.001`; a full tax year produces
+`<ref>.001` through `<ref>.012`. e.g. `20440843.001`. The earlier `.003` /
+`.004` Sage exports happened to fit this convention because they were the
+third and fourth submissions of a sequence.
 
 ## Number format
 

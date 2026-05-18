@@ -40,6 +40,36 @@ def compute_uif_total(remunerable) -> Decimal:
     return one_percent + one_percent
 
 
+def build_filename(uif_ref: str, sequence: int) -> str:
+    """
+    Build the output filename for a single UIF declaration file.
+
+    Format: ``<uif_ref_stripped_of_leading_zeros>.<sequence_zero_padded_3_digits>``
+
+    Args:
+        uif_ref: The UIF reference number, e.g. "020440843". Any leading
+            zeros are stripped (Sage stores them with a leading zero but
+            the filename convention drops it).
+        sequence: 1-indexed position of this file within the current
+            generation batch. The first file in the batch is 1, the
+            second is 2, and so on. For a full tax year this will run
+            from 1 to 12 (March = 1, February = 12).
+
+    Returns:
+        Filename string, e.g. "20440843.001".
+
+    Examples:
+        >>> build_filename("020440843", 1)
+        '20440843.001'
+        >>> build_filename("020440843", 12)
+        '20440843.012'
+        >>> build_filename("120440843", 1)
+        '120440843.001'
+    """
+    stripped = uif_ref.lstrip("0") or "0"
+    return f"{stripped}.{sequence:03d}"
+
+
 def _fmt(value) -> str:
     """Two decimals, but a trailing '.00' is dropped ('11550', '6232.80')."""
     text = f"{value:.2f}"

@@ -39,7 +39,8 @@ Status: **awaiting deploy + smoke test**
   no gradient text, no em dashes in UI copy.
 
 ## Known open items (carried forward)
-- File extension (`.003` vs `.004`) is a config field defaulting to `003`.
+- Filename extension is now an auto-numbered sequence (`.001`, `.002`, … per
+  file in the batch, ordered by tax-year month).
 - 2025 Employee Details CSV not yet supplied — 2025 regression test is partial.
 - Remunerability map confirmed only for travel allowance + severance.
 - Output line order is employee-code order, not Sage's internal order.

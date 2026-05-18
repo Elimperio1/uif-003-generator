@@ -76,7 +76,6 @@ class Company:
     contact_email_header: str   # 8060
     contact_email_footer: str   # 8160
     submission_mode: str = "LIVE"   # 8030 ("LIVE" or "TEST")
-    file_extension: str = "003"     # output filename extension
 
 
 @dataclass
