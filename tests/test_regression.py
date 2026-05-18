@@ -89,7 +89,7 @@ def _run_year(ytd_name: str, emp_name: str, expected_name: str) -> None:
         pytest.skip(f"real samples not present ({ytd_name} / {emp_name} / {expected_name})")
 
     ytd_bytes = ytd_path.read_bytes()
-    ytd_data, _ = parse_ytd.parse(ytd_bytes)
+    ytd_data = parse_ytd.parse(ytd_bytes)
     emp_data = parse_employees.parse(emp_path.read_bytes())
     matched, _ = match.join(ytd_data, emp_data)
 
