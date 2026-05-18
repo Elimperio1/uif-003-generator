@@ -20,7 +20,7 @@ SAMPLE_YTD = (
     ",,,,,,Status: No longer employed; From: 2020/01/01 To: 2024/12/24; Tax age: 40,,,,,,,,,,,,\r\n"
     "Earnings,,,,,,,,,,,,,,,,,,\r\n"
     "Basic salary,,1\xa0000.00,,0,,,0,0,0,0,0,0,0,,0,2\xa0000.00,0,3\xa0000.00\r\n"
-    "Travel allowance - 80%,,500,,0,,,0,0,0,0,0,0,0,,0,0,0,500\r\n"
+    "Travel allowance - 80%,,500.00,,0,,,0,0,0,0,0,0,0,,0,0,0,500.00\r\n"
     "TOTAL,,1\xa0500.00,,0,,,0,0,0,0,0,0,0,,0,2\xa0000.00,0,3\xa0500.00\r\n"
     "Deductions,,,,,,,,,,,,,,,,,,\r\n"
     "Unemployment insurance fund,,14.00,,0,,,0,0,0,0,0,0,0,,0,20.00,0,34.00\r\n"
@@ -63,8 +63,9 @@ def test_tax_year_end_year():
 
 
 def test_parse_reads_employee_block_and_earnings():
-    records = parse(SAMPLE_YTD.encode("cp1252"))
+    records, corruption = parse(SAMPLE_YTD.encode("cp1252"))
     assert set(records) == {"7"}
+    assert corruption == []  # clean fixture, no missing-decimal cells
 
     record = records["7"]
     assert record.employee_name == "Jane Sample"

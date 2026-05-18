@@ -225,7 +225,47 @@ def section(eyebrow: str, title: str) -> None:
 
 @st.cache_data(show_spinner=False)
 def _parse_ytd(data: bytes):
-    return parse_ytd.parse(data), parse_ytd.tax_year_end_year(data)
+    records, corruption = parse_ytd.parse(data)
+    return records, corruption, parse_ytd.tax_year_end_year(data)
+
+
+def _infer_decimal(raw_value: str) -> str:
+    """Divide the suspect integer by 100 and format with 2 decimals."""
+    raw_value = (raw_value or "").strip()
+    sign = ""
+    if raw_value.startswith("-"):
+        sign = "-"
+        raw_value = raw_value[1:]
+    try:
+        v = int(raw_value)
+    except ValueError:
+        return raw_value
+    return f"{sign}{v / 100:.2f}"
+
+
+def _show_missing_decimal_errors(errors) -> None:
+    """Render the red error block + remediation, then stop the app."""
+    st.error(
+        "**Monetary values are missing decimal places — file cannot be generated**"
+    )
+    for e in errors:
+        inferred = _infer_decimal(e.raw_value)
+        st.markdown(
+            f"- **{e.employee_name}** (code {e.employee_code}): "
+            f"{e.field_name} for {e.month} = `\"{e.raw_value}\"` "
+            f"— looks like a corrupted decimal "
+            f"(likely originally `\"{inferred}\"`)."
+        )
+    st.markdown(
+        "These values were probably mangled by Excel converting South African "
+        "comma decimals to US/UK format. To fix: re-export the Year to Date "
+        "Detail report from Sage and upload the CSV WITHOUT opening it in "
+        "Excel first. If you need to open it in Excel (e.g. to fix the SA ID "
+        "column), set Excel's regional decimal separator to comma before "
+        "opening: File → Options → Advanced → uncheck \"Use system "
+        "separators\", set Decimal separator to \",\" (comma) and Thousands "
+        "separator to \" \" (space) or \".\" (period). Save and re-upload."
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -288,7 +328,7 @@ if not (ytd_file and emp_file):
 # ---------------------------------------------------------------------------
 
 try:
-    ytd_data, tax_year_end = _parse_ytd(ytd_file.getvalue())
+    ytd_data, monetary_corruption, tax_year_end = _parse_ytd(ytd_file.getvalue())
 except Exception as exc:  # noqa: BLE001
     st.error(f"Could not read the Year to Date Detail CSV: {exc}")
     st.stop()
@@ -367,6 +407,17 @@ months = st.multiselect(
 )
 if not months:
     st.info("Select at least one month.")
+    st.stop()
+
+# ---------------------------------------------------------------------------
+# Hard-block: monetary cells with no decimal point in any selected month.
+# These are almost always values mangled by Excel under a US/UK locale.
+# ---------------------------------------------------------------------------
+
+_selected = set(months)
+_relevant_corruption = [e for e in monetary_corruption if e.month in _selected]
+if _relevant_corruption:
+    _show_missing_decimal_errors(_relevant_corruption)
     st.stop()
 
 # ---------------------------------------------------------------------------

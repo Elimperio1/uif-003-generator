@@ -5,11 +5,55 @@ Returns (blocking_errors, soft_warnings):
   - blocking errors stop file generation entirely (missing required identity
     fields — SARS uFiling would reject the file);
   - soft warnings are surfaced to the user but do not block the download.
+
+Also exposes raw-cell corruption detectors that run during parsing on the
+literal CSV cell strings, before any numeric conversion.
 """
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 from .models import CONFIRMED_FULL_REMUNERABLE, REMUNERABLE_PCT, MatchedRecord
+
+
+class MonetaryCorruption(NamedTuple):
+    """One corrupted monetary cell, captured at parse time."""
+
+    employee_code: str
+    employee_name: str
+    month: str
+    field_name: str
+    raw_value: str
+
+
+def looks_like_missing_decimal(raw_value) -> bool:
+    """
+    Detect monetary values that have lost their decimal places.
+
+    The Sage CSV format always emits monetary values with 2 decimal places
+    (e.g. "5000.00", "103.45"). A pure-integer string with no decimal
+    point is almost certainly a value that was originally "103,45" (South
+    African comma decimal) and got corrupted by Excel handling the file
+    under a US/UK locale where comma is a thousands separator. The
+    resulting value is 100x too large.
+
+    IMPORTANT: this check MUST be called on the raw string read from the
+    CSV cell BEFORE any numeric conversion. Once the value has been
+    converted to Decimal or float, the corruption signature is lost.
+
+    Returns:
+        True if the raw value looks corrupted, False otherwise. Zero,
+        blank, and None all return False (handled by other validation).
+    """
+    if raw_value is None:
+        return False
+    s = str(raw_value).strip()
+    if not s or s == "0":
+        return False
+    if s.startswith("-"):
+        s = s[1:]
+    return s.isdigit()
 
 
 def _label(record: MatchedRecord) -> str:

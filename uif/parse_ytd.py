@@ -25,6 +25,7 @@ import re
 
 from .models import TAX_YEAR_MONTHS, YtdRecord
 from .parse_employees import parse_employee_code
+from .validate import MonetaryCorruption, looks_like_missing_decimal
 
 _SECTION_HEADERS = {
     "Earnings", "Deductions", "Company Contributions",
@@ -92,16 +93,43 @@ def _parse_status(text: str) -> tuple[str, str]:
     return status, end_date
 
 
-def parse(file_bytes: bytes) -> dict[str, YtdRecord]:
-    """Parse the YTD CSV into {employee_code: YtdRecord}."""
+def parse(
+    file_bytes: bytes,
+) -> tuple[dict[str, YtdRecord], list[MonetaryCorruption]]:
+    """
+    Parse the YTD CSV into ``({employee_code: YtdRecord}, corruption_errors)``.
+
+    Every monetary cell read during parsing is also checked, in its raw
+    string form, against ``looks_like_missing_decimal``. Any hit is
+    captured as a ``MonetaryCorruption`` entry for the UI to surface; the
+    parser still stores the (potentially-wrong) numeric value so the user
+    can see what would have been generated, but generation must be
+    blocked when this list is non-empty for any selected month.
+    """
     text = _decode(file_bytes)
     rows = list(csv.reader(io.StringIO(text)))
     month_cols = _find_month_columns(rows)
 
     records: dict[str, YtdRecord] = {}
+    corruption: list[MonetaryCorruption] = []
     current: YtdRecord | None = None
     section: str = ""
     expecting_status = False
+
+    def _check_monetary_row(field_name: str) -> None:
+        """Scan every month cell on `row` and record any missing-decimal hits."""
+        for month, col in month_cols.items():
+            raw = row[col] if col < len(row) else ""
+            if looks_like_missing_decimal(raw):
+                corruption.append(
+                    MonetaryCorruption(
+                        employee_code=current.employee_code,
+                        employee_name=current.employee_name,
+                        month=month,
+                        field_name=field_name,
+                        raw_value=str(raw).strip(),
+                    )
+                )
 
     for row in rows:
         if not row:
@@ -140,12 +168,26 @@ def parse(file_bytes: bytes) -> dict[str, YtdRecord]:
             section = first
             continue
 
-        if section == "Earnings" and first and first != "TOTAL":
-            for month, col in month_cols.items():
-                amount = _num(row[col]) if col < len(row) else 0.0
-                if amount:
-                    current.earnings[month][first] = (
-                        current.earnings[month].get(first, 0.0) + amount
-                    )
+        if section == "Earnings" and first:
+            if first == "TOTAL":
+                # The Earnings TOTAL row. Don't store it (gross is derived
+                # from the line items) but still check every cell for
+                # missing-decimal corruption.
+                _check_monetary_row("gross earnings")
+            else:
+                _check_monetary_row(first)
+                for month, col in month_cols.items():
+                    amount = _num(row[col]) if col < len(row) else 0.0
+                    if amount:
+                        current.earnings[month][first] = (
+                            current.earnings[month].get(first, 0.0) + amount
+                        )
+        elif section == "Deductions" and first == "Unemployment insurance fund":
+            _check_monetary_row("UIF deduction")
+        elif (
+            section == "Company Contributions"
+            and first == "Unemployment insurance fund"
+        ):
+            _check_monetary_row("UIF company contribution")
 
-    return records
+    return records, corruption
