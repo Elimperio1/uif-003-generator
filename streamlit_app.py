@@ -48,8 +48,8 @@ st.title("UIF 003 Generator")
 
 st.markdown(
     """
-Generates SARS UIF declaration files (`.003`) for one or more months of a
-South African tax year, using two CSV exports from Sage.
+Generates SARS UIF eDecs declaration files (`uuuuuuuu.nnn`) for one or
+more months of a South African tax year, using two CSV exports from Sage.
 
 ### What to upload
 
