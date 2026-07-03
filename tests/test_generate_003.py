@@ -146,3 +146,50 @@ def test_build_terminated_employee_carries_end_date_and_status_06():
     )
     output = build([terminated], "February", "202402", _company()).decode("latin-1")
     assert "8270,20231231,8280,06," in output
+
+
+def _sept_leaver() -> MatchedRecord:
+    """A YTD-terminated employee whose end date is September 2025."""
+    return _matched(
+        "1",
+        {"surname": "Ndlovu", "first_names": "Thandi", "id_number": "8905120500085",
+         "date_of_birth": "19890512", "date_engaged": "20190101"},
+        "No longer employed",
+        {"Basic salary": 8000.0},
+        end_date="20250930",
+    )
+
+
+def test_terminated_future_month_shows_active():
+    # Declaring March 2025 for someone who only leaves in September 2025:
+    # in March she was still employed, so no end date and status 01.
+    output = build([_sept_leaver()], "February", "202503", _company()).decode("latin-1")
+    assert "8270" not in output
+    assert "8280,01" in output
+
+
+def test_terminated_current_month_shows_terminated():
+    # Declaring the month she actually leaves: end date + status 06.
+    output = build([_sept_leaver()], "February", "202509", _company()).decode("latin-1")
+    assert "8270,20250930" in output
+    assert "8280,06" in output
+
+
+def test_terminated_past_month_shows_terminated():
+    # Declaring a month after she left: still terminated.
+    output = build([_sept_leaver()], "February", "202512", _company()).decode("latin-1")
+    assert "8270,20250930" in output
+    assert "8280,06" in output
+
+
+def test_active_employee_unaffected():
+    record = _matched(
+        "1",
+        {"surname": "Molefe", "first_names": "Sipho", "id_number": "8001015009087",
+         "date_of_birth": "19800101", "date_engaged": "20180101"},
+        "Employed",
+        {"Basic salary": 8000.0},
+    )
+    output = build([record], "February", "202503", _company()).decode("latin-1")
+    assert "8280,01" in output
+    assert "8270" not in output

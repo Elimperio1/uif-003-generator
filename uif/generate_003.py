@@ -146,10 +146,17 @@ def build(
         fields += ["8250", emp.date_of_birth if emp else ""]
         fields += ["8260", emp.date_engaged if emp else ""]
 
+        # Termination is per-period: an employee who leaves in a later month
+        # was still active in this one. Only carry the end date + terminated
+        # status once the leaving month is within or before the declared
+        # period. Prefer the YTD end date, falling back to the employee record.
         status = record.ytd.status
-        if status in TERMINATED_STATUSES and record.ytd.end_date:
-            fields += ["8270", record.ytd.end_date]
-        fields += ["8280", STATUS_CODE.get(status, DEFAULT_STATUS_CODE)]
+        end_date = record.ytd.end_date or (emp.end_date if emp else "")
+        if status in TERMINATED_STATUSES and end_date and end_date[:6] <= period_yyyymm:
+            fields += ["8270", end_date]
+            fields += ["8280", STATUS_CODE.get(status, DEFAULT_STATUS_CODE)]
+        else:
+            fields += ["8280", DEFAULT_STATUS_CODE]
 
         fields += [
             "8300", _fmt(gross),
