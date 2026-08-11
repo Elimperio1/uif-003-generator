@@ -9,12 +9,15 @@ The name is a pun on Afrikaans *effektief*: UIF, made effective.
 
 ## How it works
 
-1. Upload the **Year to Date Detail** CSV (payroll figures per month per
-   employee).
-2. Upload the **Employee Details** CSV (employee master with IDs, passports,
-   DOBs, employment dates). Before uploading, open this file in Excel, format
-   column B as **Number** with 0 decimals, and save. Otherwise Excel mangles SA
-   ID numbers into scientific notation.
+1. Upload the payroll file: the Sage **Year to Date Detail** CSV, or a
+   **Standard Format** payroll workbook (.xlsx, one sheet per tax year —
+   pick the tax year in the app).
+2. Upload the employee master: the Sage **Employee Details** CSV, or the
+   Standard Format master workbook (.xlsx, "Employee details" sheet).
+   Formats are detected automatically, per file, and may be mixed.
+   Sage CSV only: before uploading, open the Employee Details file in
+   Excel, format column B as **Number** with 0 decimals, and save —
+   otherwise Excel mangles SA ID numbers into scientific notation.
 3. Fill the company / filer details once (UIF ref, PAYE ref, contact name,
    phone, email, submission mode).
 4. Pick the month(s) you want declarations for.

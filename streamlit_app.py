@@ -1,8 +1,9 @@
 """
 UIF-ektief — Streamlit app entry point.
 
-Takes two Sage CSV exports plus a company-config form and produces one or more
-downloadable SARS UIF declaration files, one per selected month of the tax year.
+Takes two payroll exports (Sage CSVs or Standard Format workbooks) plus a
+company-config form and produces one or more downloadable SARS UIF declaration
+files, one per selected month of the tax year.
 No authentication: the app is stateless and processes everything in memory.
 """
 
@@ -12,7 +13,7 @@ import zipfile
 import pandas as pd
 import streamlit as st
 
-from uif import generate_003, match, parse_employees, parse_ytd, validate
+from uif import generate_003, match, parse_employees, parse_standard, parse_ytd, validate
 from uif.models import TAX_YEAR_MONTHS, Company, period_code
 
 st.set_page_config(
@@ -233,6 +234,21 @@ def _parse_employees(data: bytes):
     return parse_employees.parse(data)
 
 
+@st.cache_data(show_spinner=False)
+def _list_year_sheets(data: bytes):
+    return parse_standard.list_year_sheets(data)
+
+
+@st.cache_data(show_spinner=False)
+def _parse_standard_ytd(data: bytes, sheet: str):
+    return parse_standard.parse_ytd(data, sheet)
+
+
+@st.cache_data(show_spinner=False)
+def _parse_standard_employees(data: bytes):
+    return parse_standard.parse_employees(data)
+
+
 # ---------------------------------------------------------------------------
 # Header
 # ---------------------------------------------------------------------------
@@ -240,7 +256,7 @@ def _parse_employees(data: bytes):
 st.markdown(
     '<h1 class="wordmark">UIF<em>-ektief</em></h1>'
     '<p class="tagline">SARS UIF declaration files for the months Sage will not '
-    "regenerate. Drop in two CSV exports, fill the company details once, pick "
+    "regenerate. Drop in two payroll exports, fill the company details once, pick "
     "the months you need, download.</p>",
     unsafe_allow_html=True,
 )
@@ -249,11 +265,13 @@ st.markdown(
 # Upload section
 # ---------------------------------------------------------------------------
 
-section("Step 1", "Drop in the Sage exports")
+section("Step 1", "Drop in the payroll files")
 
 st.markdown(
-    "Both files must be from the **same company and same tax year**. Before "
-    "uploading the Employee Details CSV, open it in Excel, format column B as "
+    "Both files must be for the **same company and same tax year**. Two "
+    "formats are supported and detected automatically, per file: the Sage "
+    "CSV exports, and Standard Format workbooks (.xlsx). For a **Sage "
+    "Employee Details CSV** only: open it in Excel first, format column B as "
     "**Number** with 0 decimals, and save. That stops Excel mangling SA ID "
     "numbers into scientific notation."
 )
@@ -262,16 +280,18 @@ col1, col2 = st.columns(2, gap="large")
 with col1:
     ytd_file = st.file_uploader(
         "Year to Date Detail",
-        type=["csv"],
+        type=["csv", "xlsx"],
         key="ytd_upload",
-        help="The payroll YTD report exported from Sage.",
+        help="Sage 'Year to Date Detail' CSV, or a Standard Format payroll "
+             "workbook (.xlsx) with one sheet per tax year.",
     )
 with col2:
     emp_file = st.file_uploader(
         "Employee Details",
-        type=["csv"],
+        type=["csv", "xlsx"],
         key="emp_upload",
-        help="The employee master report with ID/passport numbers, DOBs, dates.",
+        help="Sage 'Employee Details' CSV, or the Standard Format employee "
+             "master workbook (.xlsx) with an 'Employee details' sheet.",
     )
 
 if not (ytd_file and emp_file):
@@ -287,16 +307,58 @@ if not (ytd_file and emp_file):
 # Parse + match
 # ---------------------------------------------------------------------------
 
+ytd_bytes = ytd_file.getvalue()
+emp_bytes = emp_file.getvalue()
+standard_warnings: list[str] = []
+
 try:
-    ytd_data, tax_year_end = _parse_ytd(ytd_file.getvalue())
+    if parse_standard.detect_format(ytd_bytes) == "standard":
+        year_sheets = _list_year_sheets(ytd_bytes)
+        if not year_sheets:
+            st.error(
+                "This workbook has no year sheets (tabs named like '2025'). "
+                "Is it the payroll workbook?"
+            )
+            st.stop()
+        if len(year_sheets) > 1:
+            sheet = st.selectbox(
+                "Tax year ending February …",
+                year_sheets,
+                index=len(year_sheets) - 1,
+                key="std_year_sheet",
+            )
+        else:
+            sheet = year_sheets[0]
+        ytd_data, standard_warnings = _parse_standard_ytd(ytd_bytes, sheet)
+        tax_year_end = parse_standard.tax_year_end_year(sheet)
+        hint = parse_standard.read_company_header(ytd_bytes, sheet)
+        hint_bits = [
+            part for part in (
+                hint["company"],
+                f"PAYE {hint['paye']}" if hint["paye"] else "",
+                f"UIF {hint['uif']}" if hint["uif"] else "",
+            ) if part
+        ]
+        if hint_bits:
+            st.markdown(
+                f"<p style='color:var(--text-muted);'>Workbook header: "
+                f"{' · '.join(hint_bits)}. Enter the official reference "
+                f"numbers below; nothing is auto-filled.</p>",
+                unsafe_allow_html=True,
+            )
+    else:
+        ytd_data, tax_year_end = _parse_ytd(ytd_bytes)
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not read the Year to Date Detail CSV: {exc}")
+    st.error(f"Could not read the payroll file: {exc}")
     st.stop()
 
 try:
-    emp_data = _parse_employees(emp_file.getvalue())
+    if parse_standard.detect_format(emp_bytes) == "standard":
+        emp_data = _parse_standard_employees(emp_bytes)
+    else:
+        emp_data = _parse_employees(emp_bytes)
 except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not read the Employee Details CSV: {exc}")
+    st.error(f"Could not read the employee details file: {exc}")
     st.stop()
 
 matched, match_warnings = match.join(ytd_data, emp_data)
@@ -311,6 +373,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 for warning in match_warnings:
+    st.warning(warning)
+for warning in standard_warnings:
     st.warning(warning)
 
 # ---------------------------------------------------------------------------
