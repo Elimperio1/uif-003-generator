@@ -51,6 +51,9 @@ DEFAULT_REMUNERABLE_PCT = 1.00
 CONFIRMED_FULL_REMUNERABLE = {
     "Basic salary", "Overtime 1.5", "Overtime 2.0", "Bonus",
     "Honey Bonus - Haygrove", "Pollination Bonus", "Back pay normal time",
+    # Standard Format (xlsx) earning columns. "Reistoelaag" is deliberately
+    # absent so the unknown-earning-type warning fires if it ever appears.
+    "Salaris", "Leave pay", "Oortyd", "Verlof",
 }
 
 # Sage employee-status text -> SARS .003 status code (field 8280).
