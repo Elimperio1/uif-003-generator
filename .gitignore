@@ -11,6 +11,7 @@ venv/
 
 # Local-only sample data (real PII)
 samples/private/
+*.xlsx
 
 # OS
 .DS_Store
