@@ -322,11 +322,16 @@ try:
             st.stop()
         if len(year_sheets) > 1:
             sheet = st.selectbox(
-                "Tax year ending February …",
+                "Tax year",
                 year_sheets,
-                index=len(year_sheets) - 1,
+                index=None,
+                placeholder="Select the tax year",
+                format_func=lambda name: f"February {name}",
                 key="std_year_sheet",
             )
+            if sheet is None:
+                st.info("Select the tax year to continue.")
+                st.stop()
         else:
             sheet = year_sheets[0]
         ytd_data, standard_warnings = _parse_standard_ytd(ytd_bytes, sheet)
