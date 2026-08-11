@@ -46,7 +46,7 @@ Status: **awaiting deploy + smoke test**
 - Output line order is employee-code order, not Sage's internal order.
 
 ## Step 4 — Standard Format input
-Status: **awaiting smoke test** (branch `standard-format`)
+Status: **complete** (smoke-tested by Melton 2026-08-11, merged to `main`)
 Design: `docs/superpowers/specs/2026-08-11-standard-format-design.md`
 - New `uif/parse_standard.py`: format detection (zip magic), employee master
   parser ("Employee details" sheet), payroll parser (one sheet per tax year).
