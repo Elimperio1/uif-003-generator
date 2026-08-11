@@ -44,3 +44,20 @@ Status: **awaiting deploy + smoke test**
 - 2025 Employee Details CSV not yet supplied — 2025 regression test is partial.
 - Remunerability map confirmed only for travel allowance + severance.
 - Output line order is employee-code order, not Sage's internal order.
+
+## Step 4 — Standard Format input
+Status: **awaiting smoke test** (branch `standard-format`)
+Design: `docs/superpowers/specs/2026-08-11-standard-format-design.md`
+- New `uif/parse_standard.py`: format detection (zip magic), employee master
+  parser ("Employee details" sheet), payroll parser (one sheet per tax year).
+- Rulings baked in: tax year from the sheet tab name + month from row
+  position (in-sheet labels are stale); UIF recomputed from earning columns
+  with soft warnings where the sheet's own UIF column differs.
+- Per-file dispatch in the app: Sage CSV and Standard xlsx can be mixed.
+  Tax-year selectbox for multi-year workbooks; workbook header shown as a
+  hint, never auto-filled.
+- `Salaris`/`Leave pay`/`Oortyd`/`Verlof` confirmed fully remunerable;
+  `Reistoelaag` deliberately left unknown (warning fires if it appears).
+- Real workbooks moved to `samples/private/standard_*.xlsx` (gitignored);
+  synthetic-fixture unit tests + private regression tests added.
+- Sage pipeline and generation rules untouched; all prior tests pass.
