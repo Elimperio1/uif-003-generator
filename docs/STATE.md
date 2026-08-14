@@ -7,13 +7,9 @@
 _Last updated: 2026-08-14_
 
 ## Now
-- **Branch:** `ektief-main` at `96a2c70` — exactly level with `origin/main`
-  (0 ahead, 0 behind).
-- **Doing:** three uncommitted items, none pushed:
-  - `M requirements.txt` — pandas ceiling (see Open flags)
-  - `?? docs/E03-COMPLIANCE.md` — new spec audit
-  - `?? docs/STATE.md` — this file has **never been committed**
-  - `?? ELECTRONIC DECLARATION SPECIFICATIONS - E03 (1).pdf`
+- **Branch:** `ektief-main` at `340643a` — pushed, level with `origin/main`,
+  working tree clean.
+- **Doing:** nothing in flight.
 
 ## Last shipped
 - `standard-format` — Standard Format xlsx input (Step 4): `uif/parse_standard.py`
@@ -49,22 +45,22 @@ _Last updated: 2026-08-14_
 - Optional: repo-local credential fix so pushes stop 403-ing (see Open flags).
 
 ## Open flags
-- **`docs/STATE.md` and `docs/E03-COMPLIANCE.md` are untracked** — local-only,
-  and lost on a fresh clone. Commit them.
-- **The E03 spec PDF is untracked** in the repo root. It's the authority for
-  the compliance audit; commit it or it goes missing.
 - **Do not pin `pandas<3`.** Prod is Python 3.14, which has **no pandas 2.x
   wheel** (`pip download` finds zero candidates) — that pin breaks the deploy.
   `requirements.txt` is now `pandas>=3.0,<4`; local runs 3.0.3, prod 3.0.5.
   Going to pandas 2 would also require pinning Python to 3.12 on Cloud.
-  Local suite passes on this pin: **89 passed, 2 skipped**. Not yet pushed, so
-  **unverified in prod** — though 3.0.5 already satisfies it, so it's a no-op
-  for the currently resolved version.
-- **Pushes 403 as `Thrilla99`** — gh CLI's global helper overrides Windows
-  Credential Manager (which holds the Elimperio1 credential). One-shot bypass:
-  `git -c credential.https://github.com.helper= -c credential.https://github.com.helper=manager push origin ektief-main:main`.
-  Durable fix (repo-local): `git config --local credential.https://github.com.helper ""`
+  Local suite passes on this pin: **89 passed, 2 skipped**. Pushed in `340643a`;
+  the Cloud rebuild on that push is **not eyeballed** — 3.0.5 already satisfies
+  the range, so it should be a no-op for the resolved version.
+- **Pushes 403 as `Thrilla99` — FIXED 2026-08-14.** gh CLI's global helper was
+  overriding Windows Credential Manager (which holds the Elimperio1
+  credential). Repo-local override now set in `.git/config`, and `340643a`
+  pushed cleanly with a plain `git push origin ektief-main:main`. If it ever
+  regresses, re-apply:
+  `git config --local credential.https://github.com.helper ""`
   then `git config --local --add credential.https://github.com.helper manager`.
+  Note this lives in the shared `.git` at `C:\Projects\uif-003-generator`, so
+  it covers both worktrees.
 - **Local `main` (19a0ec5) and the `step-1-scaffold` worktree are an UNRELATED
   abandoned scaffold history — never merge them into anything** (see memory
   note "prod-vs-local-unrelated-repos"). Confirmed 2026-08-14: no common
