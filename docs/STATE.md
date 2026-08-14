@@ -7,21 +7,28 @@
 _Last updated: 2026-08-14_
 
 ## Now
-- **Branch:** `e03-compliance`, branched off `ektief-main`/`cef1435`.
-  **Committed but NOT pushed and NOT merged** — waiting on Melton's smoke test.
-- **Doing:** E03 spec compliance fixes. 8 of the 9 findings in
-  `docs/E03-COMPLIANCE.md` are closed; #9 deliberately left alone.
+- **Branch:** `e03-compliance` at `48acab1` — working tree clean, **1 commit
+  ahead of `origin/main`, not behind**. Branched off `ektief-main`/`cef1435`.
+  **NOT pushed, NOT merged** — waiting on Melton's smoke test.
+- **Doing:** E03 spec compliance. 8 of the 9 findings in
+  `docs/E03-COMPLIANCE.md` are closed; #9 deliberately left alone. Each
+  finding in that file now carries a "Fixed —" note saying what was done.
+- **Verified so far (automated only — the smoke test has NOT happened):**
+  suite **123 passed, 2 skipped**; app boots headless HTTP 200; and on the
+  real private workbooks, generating all 12 months for tax years 2023–2025
+  under `cef1435` vs `48acab1` with the same reference and no overrides gives
+  **byte-identical files**. The new rules only fire where the old behaviour
+  was wrong.
 - **Smoke-test checklist** (the parts automated tests cannot reach):
-  1. Upload the two Standard Format workbooks, pick tax year **2023** — that
-     is the only sheet with terminations, so it is the one that shows the new
-     Step-4 panel. 4 employees should be listed with a `06 Resigned` dropdown.
-  2. Change one to `11 Retrenched`, confirm the preview's `Status (8280)`
-     column follows and the amber "will be declared as 06 Resigned" count drops.
-  3. Type the UIF reference **with a slash** (`2044084/3`) and confirm the app
-     reports it will be sent as `020440843` and the download is
-     `20440843.001` — the old code produced `2044084/3.001`, an invalid name.
-  4. Set "Starting file number" to something other than 1 and confirm the
-     filenames follow.
+  1. Load the two Standard Format workbooks, tax year **2023** — the only
+     sheet with terminations, so the only one that shows the new Step-4
+     panel. 4 employees, each with a `06 Resigned` dropdown.
+  2. Change one to `11 Retrenched`; the preview's `Status (8280)` column
+     should follow and the amber "will be declared as 06 Resigned" count drop.
+  3. Enter the UIF reference **with a slash** (`2044084/3`) — the app should
+     say it will be sent as `020440843` and the download should be
+     `20440843.001`. The old code produced `2044084/3.001`, an invalid name.
+  4. Set "Starting file number" above 1 and confirm the filenames follow.
 
 ## Last shipped
 - `standard-format` — Standard Format xlsx input (Step 4): `uif/parse_standard.py`
@@ -32,7 +39,8 @@ _Last updated: 2026-08-14_
   **Deploy confirmed live 2026-08-14** (see Deployment).
 - `4f9982d` — output filename changed to `<uifref-no-leading-zero>.NNN` with
   batch-sequence numbering. This is the commit that introduced compliance
-  gaps #3 and #4 in `docs/E03-COMPLIANCE.md`.
+  gaps #3 and #4 in `docs/E03-COMPLIANCE.md`; both are fixed on
+  `e03-compliance`.
 
 ## Deployment (confirmed live 2026-08-14)
 - Cloud app is owned by the **`elimperio1`** Streamlit account, NOT `thrilla99`
@@ -48,7 +56,10 @@ _Last updated: 2026-08-14_
   contradicts README's "intentionally public-facing". Decide which is right.
 
 ## Next
-- **Smoke-test `e03-compliance`, then push + merge.** Nothing else is queued.
+- **Smoke-test `e03-compliance`, then push + merge:**
+  `git push origin e03-compliance` →
+  `git checkout ektief-main && git merge --ff-only e03-compliance` →
+  `git push origin ektief-main:main`. That last push is the whole deploy.
 - Still open from the audit: finding #6's wider half — the spec wants details
   for **all** employees monthly "irrespective of whether they are contributors
   or non-contributors", but the app's `gross > 0` inclusion rule omits
@@ -57,16 +68,20 @@ _Last updated: 2026-08-14_
 - Finding #9 (`8320` round-then-double vs strict 2%) stays as-is: it
   reproduces Sage and matches the verified samples. Only revisit if SARS
   objects.
-- Optional: repo-local credential fix so pushes stop 403-ing (see Open flags).
 
 ## Open flags
+- **The E03 check digit cannot validate Elimperio's own reference.** Appendix A
+  reproduces its worked example exactly (`2648757` → check digit 7) but
+  publishes multipliers for a **6-digit base only**; `2044084/3` has 7, and
+  five candidate extensions all fail. `uif/uif_ref.check_digit_ok` returns
+  `None` for those and the check is **warning-only**. Do not "fix" this into a
+  blocking rule — it would reject valid submissions.
 - **Do not pin `pandas<3`.** Prod is Python 3.14, which has **no pandas 2.x
   wheel** (`pip download` finds zero candidates) — that pin breaks the deploy.
   `requirements.txt` is now `pandas>=3.0,<4`; local runs 3.0.3, prod 3.0.5.
   Going to pandas 2 would also require pinning Python to 3.12 on Cloud.
-  Local suite passes on this pin: **89 passed, 2 skipped**. Pushed in `340643a`
-  and the Cloud rebuild was watched through to a clean boot on 2026-08-14 —
-  prod serves the app normally on the new range.
+  Pushed in `340643a` and the Cloud rebuild was watched through to a clean
+  boot on 2026-08-14 — prod serves the app normally on the new range.
 - **Pushes 403 as `Thrilla99` — FIXED 2026-08-14.** gh CLI's global helper was
   overriding Windows Credential Manager (which holds the Elimperio1
   credential). Repo-local override now set in `.git/config`, and `340643a`
@@ -82,13 +97,17 @@ _Last updated: 2026-08-14_
   ancestor with `origin/main`. Prod tracks `origin/main` via `ektief-main`.
   The second worktree lives at `C:\Projects\uif-003-generator` — that's why
   there appear to be two `streamlit_app.py` files; it's one repo, two checkouts.
-- `standard-format` branch is fully merged (same SHA as `ektief-main`) — safe
-  to delete whenever.
+- `standard-format` branch is fully merged (same SHA as `96a2c70`, an ancestor
+  of `ektief-main`) — safe to delete whenever.
 - Regression tests need the gitignored private files:
   `samples/private/standard_payroll.xlsx`, `standard_master.xlsx`,
   `standard_expected.json` (real client data — never commit; `*.xlsx` is
-  gitignored as a tripwire). Tests skip cleanly when absent — those are the
-  2 skips.
+  gitignored as a tripwire). The **2 skips are the Sage CSV samples**
+  (`ytd_2024.csv` etc.), which are genuinely absent; the Standard Format
+  private suite does run.
+- Reading the spec PDF needs `pypdf` (`pip install pypdf`) — there is no
+  poppler on this machine, so `Read` cannot render it. Deliberately **not** in
+  `requirements.txt`; it is a dev convenience, not an app dependency.
 - Known data quirks in the Standard workbooks (all handled + warned in-app):
   stale month labels on 2025–2027 sheets, 6 manually-adjusted UIF months,
   4 months where the sheet forgot the R17,712 cap, ex-employees paid
