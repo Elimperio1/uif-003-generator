@@ -14,7 +14,13 @@ import pandas as pd
 import streamlit as st
 
 from uif import generate_003, match, parse_employees, parse_standard, parse_ytd, validate
-from uif.models import TAX_YEAR_MONTHS, Company, period_code
+from uif import uif_ref as uif_ref_rules  # `uif_ref` is also a form field below
+from uif.models import (
+    EMPLOYMENT_STATUS_CODES,
+    TAX_YEAR_MONTHS,
+    Company,
+    period_code,
+)
 
 st.set_page_config(
     page_title="UIF-ektief",
@@ -423,6 +429,18 @@ company = Company(
     submission_mode=submission_mode,
 )
 
+normalised_ref = uif_ref_rules.normalise(company.uif_ref)
+if normalised_ref != company.uif_ref.strip():
+    st.markdown(
+        f"<p style='color:var(--text-muted);'>Field 8020 will be sent as "
+        f"<strong style='color:var(--text);'>{normalised_ref}</strong> — the "
+        f"spec requires 9 digits, zero-filled from the left, with any slash "
+        f"or space removed.</p>",
+        unsafe_allow_html=True,
+    )
+for warning in validate.validate_company(company):
+    st.warning(warning)
+
 # ---------------------------------------------------------------------------
 # Month selection
 # ---------------------------------------------------------------------------
@@ -446,9 +464,65 @@ section("Step 4", "Preview")
 
 blocking_total: list[str] = []
 ordered_months = sorted(months, key=TAX_YEAR_MONTHS.index)
+periods = {month: period_code(month, tax_year_end) for month in ordered_months}
+
+# --- Termination reasons (field 8280) -------------------------------------
+# The payroll export only says "Terminated" / "No longer employed", which the
+# spec has no code for. Defaulting everyone to 06 Resigned is accepted
+# silently by SARS and generally disqualifies a UIF claim, so each one is
+# confirmed here instead.
+terminations = generate_003.terminations_for_months(matched, ordered_months, periods)
+status_overrides: dict[str, str] = {}
+
+if terminations:
+    st.markdown(
+        f"<p style='margin-bottom:0.75rem;'><strong>{len(terminations)} "
+        f"employee(s) are declared as having left.</strong> Field 8280 needs "
+        f"the reason. The payroll file cannot tell a resignation from a "
+        f"retrenchment, so confirm each one — SARS accepts any valid code "
+        f"without complaint, and the wrong one can cost the employee their "
+        f"claim.</p>",
+        unsafe_allow_html=True,
+    )
+    status_options = list(EMPLOYMENT_STATUS_CODES)
+    for record in terminations:
+        emp = record.employee
+        name = (
+            f"{emp.first_names} {emp.surname}".strip()
+            if emp
+            else record.ytd.employee_name
+        )
+        default = generate_003.default_status_code(record)
+        left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
+        left.markdown(
+            f"<p style='margin:0;'><strong>{record.employee_code}</strong> — "
+            f"{name}<br><span style='color:var(--text-muted);font-size:0.85rem;'>"
+            f"left {generate_003.termination_date(record) or 'date unknown'}"
+            f"</span></p>",
+            unsafe_allow_html=True,
+        )
+        status_overrides[record.employee_code] = right.selectbox(
+            f"Reason for {record.employee_code}",
+            status_options,
+            index=status_options.index(default),
+            format_func=lambda code: f"{code} — {EMPLOYMENT_STATUS_CODES[code]}",
+            key=f"status_8280_{record.employee_code}",
+            label_visibility="collapsed",
+        )
+
+    still_resigned = [
+        code for code in status_overrides.values() if code == "06"
+    ]
+    if still_resigned:
+        st.warning(
+            f"{len(still_resigned)} of these will be declared as "
+            f"06 Resigned. Resignation generally disqualifies a UIF claim — "
+            f"confirm each is genuinely a resignation before downloading."
+        )
+    st.markdown("<hr>", unsafe_allow_html=True)
 
 for month in ordered_months:
-    period = period_code(month, tax_year_end)
+    period = periods[month]
     blocking, soft = validate.validate(matched, month)
     blocking_total.extend(blocking)
     included = generate_003.included_for_month(matched, month)
@@ -457,6 +531,13 @@ for month in ordered_months:
     for record in included:
         gross, remuneration, uif_total = generate_003.employee_figures(record, month)
         emp = record.employee
+        status_8280 = (
+            status_overrides.get(
+                record.employee_code, generate_003.default_status_code(record)
+            )
+            if generate_003.is_terminated_in_period(record, period)
+            else "01"
+        )
         rows.append(
             {
                 "Code": record.employee_code,
@@ -465,11 +546,15 @@ for month in ordered_months:
                     if emp
                     else record.ytd.employee_name
                 ),
-                "ID / Passport": (emp.id_number or emp.passport_number) if emp else "",
+                "ID / Passport / Payroll": (
+                    (emp.id_number or emp.passport_number) if emp else ""
+                ) or record.employee_code,
                 "Gross (8300)": gross,
                 "Remuneration (8310)": remuneration,
                 "UIF total (8320)": float(uif_total),
-                "Status": record.ytd.status,
+                "Status (8280)": (
+                    f"{status_8280} — {EMPLOYMENT_STATUS_CODES[status_8280]}"
+                ),
             }
         )
 
@@ -500,12 +585,30 @@ if blocking_total:
 
 section("Step 5", "Download")
 
-stripped_ref = company.uif_ref.lstrip("0") or company.uif_ref
+st.markdown(
+    "The file number is the `.nnn` on the end of the filename. **If the Fund "
+    "receives two files with the same name, the later one overwrites the "
+    "earlier one entirely** — so a second batch under this reference must "
+    "start above the highest number already submitted."
+)
+start_number = int(
+    st.number_input(
+        "Starting file number",
+        min_value=1,
+        max_value=1000 - len(ordered_months),
+        value=1,
+        step=1,
+        key="start_sequence",
+        help="Numbers run consecutively from here, one per selected month, "
+             "in March-first order.",
+    )
+)
 
 files: dict[str, bytes] = {}
-for sequence, month in enumerate(ordered_months, start=1):
-    period = period_code(month, tax_year_end)
-    content = generate_003.build(matched, month, period, company)
+for sequence, month in enumerate(ordered_months, start=start_number):
+    content = generate_003.build(
+        matched, month, periods[month], company, status_overrides
+    )
     filename = generate_003.build_filename(company.uif_ref, sequence)
     files[filename] = content
 
@@ -519,9 +622,11 @@ if len(files) == 1:
         type="primary",
     )
 else:
-    first_period = period_code(ordered_months[0], tax_year_end)
-    last_period = period_code(ordered_months[-1], tax_year_end)
-    zip_filename = f"{stripped_ref}-uif-{first_period}-to-{last_period}.zip"
+    first_period = periods[ordered_months[0]]
+    last_period = periods[ordered_months[-1]]
+    zip_filename = (
+        f"{normalised_ref[-8:]}-uif-{first_period}-to-{last_period}.zip"
+    )
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for filename, content in files.items():

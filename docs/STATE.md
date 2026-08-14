@@ -7,9 +7,21 @@
 _Last updated: 2026-08-14_
 
 ## Now
-- **Branch:** `ektief-main` at `340643a` — pushed, level with `origin/main`,
-  working tree clean.
-- **Doing:** nothing in flight.
+- **Branch:** `e03-compliance`, branched off `ektief-main`/`cef1435`.
+  **Committed but NOT pushed and NOT merged** — waiting on Melton's smoke test.
+- **Doing:** E03 spec compliance fixes. 8 of the 9 findings in
+  `docs/E03-COMPLIANCE.md` are closed; #9 deliberately left alone.
+- **Smoke-test checklist** (the parts automated tests cannot reach):
+  1. Upload the two Standard Format workbooks, pick tax year **2023** — that
+     is the only sheet with terminations, so it is the one that shows the new
+     Step-4 panel. 4 employees should be listed with a `06 Resigned` dropdown.
+  2. Change one to `11 Retrenched`, confirm the preview's `Status (8280)`
+     column follows and the amber "will be declared as 06 Resigned" count drops.
+  3. Type the UIF reference **with a slash** (`2044084/3`) and confirm the app
+     reports it will be sent as `020440843` and the download is
+     `20440843.001` — the old code produced `2044084/3.001`, an invalid name.
+  4. Set "Starting file number" to something other than 1 and confirm the
+     filenames follow.
 
 ## Last shipped
 - `standard-format` — Standard Format xlsx input (Step 4): `uif/parse_standard.py`
@@ -36,12 +48,15 @@ _Last updated: 2026-08-14_
   contradicts README's "intentionally public-facing". Decide which is right.
 
 ## Next
-- _(fill in — what's the next task?)_
-- **E03 compliance fixes** → `docs/E03-COMPLIANCE.md`, 9 findings ranked.
-  Offered but not started: #4 filename (+ its two wrong tests), #5 `8220`
-  fallback, #7 `8240` truncation, #1 `8020` normalisation — small and testable.
-  #2 (`8280` = Resigned) and #3 (sequence restarts at `.001`) need a UI/product
-  decision first.
+- **Smoke-test `e03-compliance`, then push + merge.** Nothing else is queued.
+- Still open from the audit: finding #6's wider half — the spec wants details
+  for **all** employees monthly "irrespective of whether they are contributors
+  or non-contributors", but the app's `gross > 0` inclusion rule omits
+  non-contributors because that is what Sage exports. Product decision, not a
+  bug.
+- Finding #9 (`8320` round-then-double vs strict 2%) stays as-is: it
+  reproduces Sage and matches the verified samples. Only revisit if SARS
+  objects.
 - Optional: repo-local credential fix so pushes stop 403-ing (see Open flags).
 
 ## Open flags

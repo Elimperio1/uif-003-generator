@@ -9,7 +9,9 @@ This spec is verified against two real Sage exports:
 
 ## Encoding & line endings
 
-- latin-1 / ISO-8859-1 encoding
+- **ASCII**, as required by spec §5 ("The file must be submitted in ASCII
+  format"). Accented characters are transliterated rather than replaced, so
+  `Böhme` is written `Bohme`, not `B?hme`. See `generate_003.to_ascii`.
 - CRLF (`\r\n`) line terminators on **every** line, including the footer
   (the file ends with a trailing `\r\n`)
 
@@ -18,13 +20,23 @@ String values are double-quoted; numeric values are not.
 
 ## Filename
 
-`<UIF reference number with leading zeros stripped>.<NNN>`, where `NNN` is the
-file's 1-indexed position within the current generation batch, zero-padded to
-three digits. Batches are ordered by tax-year month (March first, February
-last). Generating a single month produces `<ref>.001`; a full tax year produces
-`<ref>.001` through `<ref>.012`. e.g. `20440843.001`. The earlier `.003` /
-`.004` Sage exports happened to fit this convention because they were the
-third and fourth submissions of a sequence.
+`uuuuuuuu.nnn` (spec §12), where `uuuuuuuu` is the **last 8 digits** of field
+`8020` — digits only, the slash excluded — and `nnn` is a 3-digit file number.
+So `1234567/8` gives `12345678`, and `020440843` gives `20440843`.
+
+Note this is "last 8 digits", not "strip leading zeros": the two rules agree
+only for a reference shaped `0` + 8 digits, which is why the real sample
+`020440843` did not expose the difference. `000123456` is `00123456`, not
+`123456`.
+
+The file number is **set by the filer**, not derived from the batch. Numbers
+run consecutively from the chosen start, one per selected month, in
+March-first order. This matters because §12/§13 say a repeated filename means
+"the last file received will be used, and it will overwrite all previously
+sent files with the same file name" — so a correction batch that restarted at
+`.001` would silently destroy the original submission at the Fund. The earlier
+`.003` / `.004` Sage exports were the third and fourth submissions of such a
+sequence.
 
 ## Number format
 
@@ -48,36 +60,75 @@ Exactly one, first line.
 | 8060 | Filer contact email                  | string | `"tax@elimperio.co.za"`  |
 | 8070 | Period being declared (YYYYMM)       | int    | `202402`                 |
 
+`8020` is normalised before it is written: non-numeric characters stripped and
+zero-filled from the left to 9 digits, per spec §8 ("123456/8 should be sent as
+001234568"). An invalid `8020` rejects the **entire file**, so the app also
+runs the Appendix A check digit — but only as a warning, and only for
+references with a 6-digit base. Appendix A publishes multipliers for that
+length alone, and real 7-digit-base references such as `2044084/3` do not
+validate under any straightforward extension of it. Treating those as invalid
+would block good submissions, so they are left unchecked.
+
+`8040`, `8050`, `8060` and `8160` are cut to their declared lengths (30, 16,
+50, 50) — see `models.FIELD_LENGTHS`.
+
 ## Employee record (UIWK)
 
 One per included employee. Field order:
-`8001, 8110, [8200|8210], 8230, 8240, 8250, 8260, [8270], 8280, 8300, 8310, 8320`
+`8001, 8110, [8200|8210|8220], 8230, 8240, 8250, 8260, [8270], 8280, [8290],
+8300, 8310, 8320`
 
 | Code | Description                              | Required  | Example          |
 |------|------------------------------------------|-----------|------------------|
 | 8001 | Record identifier                        | const     | `"UIWK"`         |
 | 8110 | UIF reference (matches header 8020)      | yes       | `"020440843"`    |
 | 8200 | SA ID number, 13 digits, **unquoted**    | one of    | `8306056177085`  |
-| 8210 | Passport number, **quoted**              | 8200/8210 | `"BN487879"`     |
-| 8230 | Surname                                  | yes       | `"Anthorn"`      |
-| 8240 | First name (truncated to 12 chars)       | yes       | `"Sibonile"`     |
+| 8210 | Passport number, **quoted**, ≤16         | 8200/     | `"BN487879"`     |
+| 8220 | Payroll number, **quoted**, ≤25          | 8210/8220 | `"0042"`         |
+| 8230 | Surname (≤120)                           | yes       | `"Anthorn"`      |
+| 8240 | First names (≤90)                        | yes       | `"Sibonile"`     |
 | 8250 | Date of birth (YYYYMMDD)                 | yes       | `19830605`       |
 | 8260 | Employment start date (YYYYMMDD)         | yes       | `20230824`       |
 | 8270 | Employment end date (YYYYMMDD)           | if term'd | `20231231`       |
 | 8280 | Employee status code                     | yes       | `01`             |
+| 8290 | Reason for non-contribution              | if 8320=0 | `06`             |
 | 8300 | Gross earnings for the period            | yes       | `11550`          |
 | 8310 | UIF remuneration (see below)             | yes       | `11550`          |
 | 8320 | UIF total (see below)                    | yes       | `231`            |
 
-`8200` is preferred when present; otherwise `8210`. ID numbers preserve leading
-zeros and are unquoted. Passports are quoted verbatim (they may contain letters
-and hyphens, e.g. `"12-135849P-12"`).
+`8200` is preferred when present, then `8210`, then `8220`. ID numbers preserve
+leading zeros and are unquoted. Passports are quoted verbatim (they may contain
+letters and hyphens, e.g. `"12-135849P-12"`).
+
+`8220` carries "the personnel, clock card or payroll number" (spec §8) and is
+filled from the employee code. Its presence is what stops a record with no ID
+and no passport being rejected — §9 rejects only when all three are absent —
+so the app warns about a missing ID instead of refusing to build the file.
 
 ### Status codes (field 8280)
 
-`01` for employed / normal / new staff; `06` for terminated ("No longer
-employed"). `8270` is present only when `8280 = 06`. Other SARS codes exist but
-are not exercised by the current data.
+The full spec §8 list is in `models.EMPLOYMENT_STATUS_CODES` (01 Active,
+02 Deceased, 04 Dismissed, 05 Contract Expired, 06 Resigned, 11 Retrenched,
+14 Business Closed, and so on).
+
+The payroll export only distinguishes "employed" from "no longer employed", so
+it can supply `01` and nothing more specific than `06`. Because `06` is a valid
+code, SARS accepts it silently — and since resignation generally disqualifies
+a UIF claim, a wrong `06` costs the employee their benefit with no error
+anywhere. The app therefore lists every termination in Step 4 and lets the
+filer set the real code per employee; `06` is pre-selected only because it
+preserves the previously verified output.
+
+`8270` is written whenever a termination is being declared, **except** for
+codes `01`, `09` and `10` — spec §9 warns when an end date accompanies a status
+that means the employee is still employed.
+
+### Reason for non-contribution (field 8290)
+
+Required whenever `8320` is zero (spec §8), otherwise SARS warns on `8290`,
+`8300`, `8310` and `8320` at once. The app emits `06` ("no income paid for the
+payroll period"), the only code that fits the reachable case — an employee paid
+solely a non-remunerable amount such as severance.
 
 ## Footer record (UIEM)
 

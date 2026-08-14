@@ -67,6 +67,58 @@ STATUS_CODE = {
 DEFAULT_STATUS_CODE = "01"
 TERMINATED_STATUSES = {"No longer employed", "Terminated"}
 
+# Field 8280 — the complete employment status list from E03 spec §8.
+# Note 18 is absent from the spec's own table; the jump from 17 to 19 is
+# theirs, not a transcription slip.
+EMPLOYMENT_STATUS_CODES = {
+    "01": "Active",
+    "02": "Deceased",
+    "03": "Retired",
+    "04": "Dismissed",
+    "05": "Contract Expired",
+    "06": "Resigned",
+    "07": "Constructively Dismissed",
+    "08": "Employers Insolvency",
+    "09": "Maternity / Adoption leave",
+    "10": "Illness leave",
+    "11": "Retrenched",
+    "12": "Transfer to another branch",
+    "13": "Absconded",
+    "14": "Business Closed",
+    "15": "Death of Domestic employer",
+    "16": "Voluntary Severance Package",
+    "17": "Reduced Working Time",
+    "19": "Parental Leave",
+}
+
+# Statuses for which spec §9 expects NO 8270 date ("the date employed to is
+# valid, and field 8280 is 01, 09 or 10" is a warning).
+STATUSES_WITHOUT_END_DATE = {"01", "09", "10"}
+
+# Field 8290 — reason for non-contribution, required whenever 8320 is zero.
+NON_CONTRIBUTION_CODES = {
+    "01": "Temporary employees (less than 24 hours per month)",
+    "02": "Learners in terms of the skills development act",
+    "03": "Employees in the national and provincial spheres of government",
+    "04": "Employees who are repatriated at the end of their contract of service",
+    "05": "Employees who earn commission only",
+    "06": "No income paid for the payroll period",
+}
+DEFAULT_NON_CONTRIBUTION_CODE = "06"
+
+# Declared field lengths from the spec §7 record layouts. Values longer than
+# these are truncated on output rather than risking a rejected record.
+FIELD_LENGTHS = {
+    "8040": 30,   # Contact Person
+    "8050": 16,   # Contact Telephone Number
+    "8060": 50,   # Contact E-mail Address
+    "8210": 16,   # Other Number
+    "8220": 25,   # Alternate Number
+    "8230": 120,  # Surname
+    "8240": 90,   # First Names
+    "8160": 50,   # Employer's Email address
+}
+
 
 @dataclass
 class Company:
