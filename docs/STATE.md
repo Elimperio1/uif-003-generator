@@ -49,9 +49,9 @@ _Last updated: 2026-08-14_
   wheel** (`pip download` finds zero candidates) — that pin breaks the deploy.
   `requirements.txt` is now `pandas>=3.0,<4`; local runs 3.0.3, prod 3.0.5.
   Going to pandas 2 would also require pinning Python to 3.12 on Cloud.
-  Local suite passes on this pin: **89 passed, 2 skipped**. Pushed in `340643a`;
-  the Cloud rebuild on that push is **not eyeballed** — 3.0.5 already satisfies
-  the range, so it should be a no-op for the resolved version.
+  Local suite passes on this pin: **89 passed, 2 skipped**. Pushed in `340643a`
+  and the Cloud rebuild was watched through to a clean boot on 2026-08-14 —
+  prod serves the app normally on the new range.
 - **Pushes 403 as `Thrilla99` — FIXED 2026-08-14.** gh CLI's global helper was
   overriding Windows Credential Manager (which holds the Elimperio1
   credential). Repo-local override now set in `.git/config`, and `340643a`
