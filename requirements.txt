@@ -1,3 +1,6 @@
 streamlit>=1.32
-pandas>=2.0
+# Ceiling stops a silent major-version jump. NOT pinned <3: Streamlit Cloud
+# runs Python 3.14, for which no pandas 2.x wheel exists — that pin breaks the
+# deploy. Local (3.0.3) and prod (3.0.5) are both on 3.0.x; tests cover that.
+pandas>=3.0,<4
 openpyxl>=3.1
