@@ -492,7 +492,11 @@ if terminations:
             if emp
             else record.ytd.employee_name
         )
-        default = generate_003.default_status_code(record)
+        # No default: a pre-selected 06 with an amber count is exactly what gets
+        # clicked past, and a wrong 06 silently costs an ex-employee their claim.
+        # The one exception is a code the payroll file itself justifies — a
+        # death — which arrives pre-selected as 02 Deceased for confirmation.
+        inferred = generate_003.inferred_status_code(record)
         left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
         left.markdown(
             f"<p style='margin:0;'><strong>{record.employee_code}</strong> — "
@@ -501,14 +505,19 @@ if terminations:
             f"</span></p>",
             unsafe_allow_html=True,
         )
-        status_overrides[record.employee_code] = right.selectbox(
+        selected = right.selectbox(
             f"Reason for {record.employee_code}",
             status_options,
-            index=status_options.index(default),
+            index=status_options.index(inferred) if inferred else None,
+            placeholder="Select the reason for leaving",
             format_func=lambda code: f"{code} — {EMPLOYMENT_STATUS_CODES[code]}",
             key=f"status_8280_{record.employee_code}",
             label_visibility="collapsed",
         )
+        # Only carry codes the filer (or the death inference) actually chose;
+        # build() does overrides.get(code, default), and a None would crash it.
+        if selected is not None:
+            status_overrides[record.employee_code] = selected
 
     still_resigned = [
         code for code in status_overrides.values() if code == "06"
@@ -531,13 +540,13 @@ for month in ordered_months:
     for record in included:
         gross, remuneration, uif_total = generate_003.employee_figures(record, month)
         emp = record.employee
-        status_8280 = (
-            status_overrides.get(
-                record.employee_code, generate_003.default_status_code(record)
+        if generate_003.is_terminated_in_period(record, period):
+            code = status_overrides.get(record.employee_code)
+            status_label = (
+                f"{code} — {EMPLOYMENT_STATUS_CODES[code]}" if code else "— not set"
             )
-            if generate_003.is_terminated_in_period(record, period)
-            else "01"
-        )
+        else:
+            status_label = f"01 — {EMPLOYMENT_STATUS_CODES['01']}"
         rows.append(
             {
                 "Code": record.employee_code,
@@ -552,9 +561,7 @@ for month in ordered_months:
                 "Gross (8300)": gross,
                 "Remuneration (8310)": remuneration,
                 "UIF total (8320)": float(uif_total),
-                "Status (8280)": (
-                    f"{status_8280} — {EMPLOYMENT_STATUS_CODES[status_8280]}"
-                ),
+                "Status (8280)": status_label,
             }
         )
 
@@ -577,6 +584,21 @@ for month in ordered_months:
 
 if blocking_total:
     st.error("Resolve the blocking errors above before files can be generated.")
+    st.stop()
+
+# UI gate (not a validate.py blocking error): every declared termination needs a
+# reason code before anything can be generated — a None override would crash
+# build(), and a silent 06 costs an ex-employee their claim.
+unset_terminations = [
+    record.employee_code
+    for record in terminations
+    if record.employee_code not in status_overrides
+]
+if unset_terminations:
+    st.error(
+        "Select a reason (field 8280) for every employee who has left before "
+        "files can be generated."
+    )
     st.stop()
 
 # ---------------------------------------------------------------------------
