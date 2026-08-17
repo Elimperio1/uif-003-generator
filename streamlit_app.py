@@ -532,7 +532,7 @@ if terminations:
 
 for month in ordered_months:
     period = periods[month]
-    blocking, soft = validate.validate(matched, month)
+    blocking, soft = validate.validate(matched, month, period)
     blocking_total.extend(blocking)
     included = generate_003.included_for_month(matched, month)
 

@@ -419,3 +419,50 @@ def test_inferred_status_code_maps_only_death():
     assert inferred_status_code(_death_record(reason="dood")) == "02"
     assert inferred_status_code(_death_record(reason="Dismissed")) is None
     assert inferred_status_code(_matched("1", {"id_number": "8306056177085"})) is None
+
+
+# --- §9 date warnings and company-length warnings (rules 8250/8260/8270) ---
+
+
+def test_start_date_after_the_period_is_flagged_as_future():
+    """§9 (8260): a start date after the declared period is 'dated in the future'."""
+    rec = _matched("1", {"id_number": "8306056177085", "date_engaged": "20250601"})
+    _, soft = validate.validate([rec], "February", "202502")
+    assert any("start date" in w and "future" in w for w in soft)
+
+
+def test_termination_before_start_is_flagged():
+    """§9 (8270): the end date cannot be earlier than the start date (8260)."""
+    rec = _matched(
+        "1", {"id_number": "8306056177085", "date_engaged": "20240101"},
+        status="Terminated", end_date="20230101",
+    )
+    _, soft = validate.validate([rec], "February", "202502")
+    assert any("before the start date" in w for w in soft)
+
+
+def test_employee_younger_than_fifteen_is_flagged():
+    """§9 (8250): 'The employee is younger than 15 years'."""
+    rec = _matched("1", {"passport_number": "BN487879", "date_of_birth": "20150101"})
+    _, soft = validate.validate([rec], "February", "202502")
+    assert any("younger than 15" in w for w in soft)
+
+
+def test_date_checks_are_skipped_without_a_period():
+    rec = _matched("1", {"id_number": "8306056177085", "date_engaged": "20250601"})
+    _, soft = validate.validate([rec], "February")       # no period
+    assert not any("future" in w for w in soft)
+
+
+def test_company_field_length_warnings():
+    long_email = "a" * 45 + "@example.co.za"             # 59 chars > 50
+    assert any(
+        "50" in w
+        for w in validate.validate_company(_company(contact_email_header=long_email))
+    )
+    assert any(
+        "30" in w for w in validate.validate_company(_company(contact_name="N" * 40))
+    )
+    assert any(
+        "16" in w for w in validate.validate_company(_company(contact_phone="0" * 20))
+    )
