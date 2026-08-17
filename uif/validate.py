@@ -106,6 +106,22 @@ def validate(
                     f"employee cannot claim until it is corrected.{fix}"
                 )
 
+        # Spec §5 encloses alphanumeric fields in double quotes but defines no
+        # escaping, so a comma inside a quoted value is ambiguous. It is written
+        # unchanged; the filer is warned to confirm SARS accepts it.
+        for value, field_name in (
+            (emp.surname, "surname"),
+            (emp.first_names, "first names"),
+            (emp.passport_number, "passport number"),
+        ):
+            if value and "," in value:
+                soft.append(
+                    f"{label}: the {field_name} contains a comma; it will be "
+                    f"written inside quotes, but the spec (§5) defines no "
+                    f"escaping — verify SARS accepts it, or remove the comma in "
+                    f"the source file."
+                )
+
         if not emp.date_of_birth:
             blocking.append(f"{label}: has no date of birth.")
         if not emp.date_engaged:

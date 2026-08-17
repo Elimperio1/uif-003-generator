@@ -9,7 +9,7 @@ is covered by test_generate_003.py.
 import pytest
 
 from uif import uif_ref, validate
-from uif.generate_003 import build, terminations_for_months, to_ascii
+from uif.generate_003 import _field, _q, build, terminations_for_months, to_ascii
 from uif.models import Company, EmployeeRecord, MatchedRecord, YtdRecord
 
 
@@ -328,3 +328,31 @@ def test_invalid_id_is_a_soft_warning_with_the_consequence_spelled_out():
     assert "scientific-notation" in warning
     assert "cannot claim" in warning
     assert "Number, 0 decimals" in warning       # the Excel fix hint
+
+
+# --- §5 quote / control-char folding --------------------------------------
+
+
+def test_curly_double_quotes_fold_to_apostrophe_not_a_straight_quote():
+    """§5 wraps alphanumeric fields in double quotes and defines no escaping, so
+    a curly double quote must fold to an apostrophe, never a straight quote that
+    would break the field."""
+    assert to_ascii("O“Reilly”") == "O'Reilly'"
+    assert _q("O“Reilly”") == "\"O'Reilly'\""
+
+
+def test_straight_double_quote_in_a_field_becomes_an_apostrophe():
+    assert _field("8230", 'Sm"ith') == "\"Sm'ith\""
+
+
+def test_control_chars_in_a_field_collapse_to_a_single_space():
+    assert _q("Sm\nith") == '"Sm ith"'
+    assert _q("a\r\n\tb") == '"a   b"'
+
+
+def test_comma_in_a_name_warns_but_is_written_unchanged():
+    records = [_matched("1", {"id_number": "8306056177085", "surname": "Smith, Jr"})]
+    _, soft = validate.validate(records, "February")
+    assert any("comma" in w for w in soft)
+    lines = _lines(records)
+    assert '8230,"Smith, Jr"' in lines[1]         # value not mutated

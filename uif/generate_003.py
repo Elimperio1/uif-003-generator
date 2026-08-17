@@ -30,7 +30,7 @@ from .models import (
 _ASCII_FALLBACKS = str.maketrans({
     "ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "œ": "oe", "Œ": "OE",
     "ß": "ss", "đ": "d", "Đ": "D", "ł": "l", "Ł": "L", "ð": "d", "Ð": "D",
-    "þ": "th", "Þ": "TH", "’": "'", "‘": "'", "“": '"', "”": '"',
+    "þ": "th", "Þ": "TH", "’": "'", "‘": "'", "“": "'", "”": "'",
     "–": "-", "—": "-",
 })
 
@@ -111,18 +111,29 @@ def _fmt(value) -> str:
     return text[:-3] if text.endswith(".00") else text
 
 
+def _sanitise(value: str) -> str:
+    """
+    Fold to ASCII (spec §5), then make the value safe inside a double-quoted
+    field.
+
+    The field delimiter is itself a double quote and the spec defines no
+    escaping, so any straight ``"`` left after transliteration becomes an
+    apostrophe. Every control character — CR, LF, TAB, and anything below 0x20
+    or the 0x7f DEL — collapses to a single space so it cannot split the record
+    across lines. Callers apply the length cut *after* this, because folding can
+    change length and a control char must not be sliced mid-replacement.
+    """
+    folded = to_ascii(value).replace('"', "'")
+    return "".join(" " if (char < " " or char == "\x7f") else char for char in folded)
+
+
 def _q(value: str) -> str:
-    return f'"{to_ascii(value)}"'
+    return f'"{_sanitise(value)}"'
 
 
 def _field(code: str, value: str) -> str:
-    """
-    Quote a value, folded to ASCII and cut to the spec's field length.
-
-    Folding happens before truncation because it can change length — "æ"
-    becomes two characters.
-    """
-    return f'"{to_ascii(value)[: FIELD_LENGTHS[code]]}"'
+    """Quote a value, folded/sanitised to ASCII and cut to the spec's length."""
+    return f'"{_sanitise(value)[: FIELD_LENGTHS[code]]}"'
 
 
 def _code_sort_key(record: MatchedRecord):
