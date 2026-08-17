@@ -141,6 +141,7 @@ class YtdRecord:
     employee_name: str
     status: str                  # "Employed" / "New" / "No longer employed"
     end_date: str = ""           # "To:" date from the status line, YYYYMMDD
+    reason: str = ""             # raw "Reason:" text from the payroll sheet, if any
     # month name -> {earning line-item name -> amount}
     earnings: dict[str, dict[str, float]] = field(default_factory=dict)
 

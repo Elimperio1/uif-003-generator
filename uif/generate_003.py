@@ -186,11 +186,38 @@ def termination_date(record: MatchedRecord) -> str:
     )
 
 
+# Payroll "Reason:" text -> the field 8280 code it justifies on its own.
+# Only death is mapped: it is unambiguous, and Step 4 pre-selects 02 Deceased
+# for it. Other reasons the payroll file spells out (e.g. "Dismissed" -> 04,
+# "Retrenched"/"Afgedank" -> 11, "Contract expired" -> 05) are deliberately
+# left for the filer to confirm per employee — a wrong 8280 is accepted
+# silently by SARS and costs an ex-employee their claim.
+_REASON_DEATH_WORDS = ("death", "deceased", "oorlede", "afgesterf", "dood")
+
+
+def inferred_status_code(record: MatchedRecord) -> str | None:
+    """The 8280 code the payroll file's own "Reason:" text justifies, else None."""
+    if record.ytd is None or not record.ytd.reason:
+        return None
+    reason = record.ytd.reason.strip().lower()
+    if any(word in reason for word in _REASON_DEATH_WORDS):
+        return "02"
+    return None
+
+
 def default_status_code(record: MatchedRecord) -> str:
-    """The 8280 code implied by the payroll export, before any override."""
+    """
+    The 8280 code implied by the payroll export, before any override.
+
+    A "Reason:" the payroll file spells out (currently only death -> 02) wins;
+    otherwise the coarse employed/terminated status text maps through
+    STATUS_CODE.
+    """
     if record.ytd is None:
         return DEFAULT_STATUS_CODE
-    return STATUS_CODE.get(record.ytd.status, DEFAULT_STATUS_CODE)
+    return inferred_status_code(record) or STATUS_CODE.get(
+        record.ytd.status, DEFAULT_STATUS_CODE
+    )
 
 
 def terminations_for_months(

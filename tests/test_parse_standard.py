@@ -95,6 +95,7 @@ def test_parse_ytd_maps_months_by_position_not_label():
     assert rec.employee_name == "Petrus Johannes Botha"
     assert rec.status == "Employed"
     assert rec.end_date == ""
+    assert rec.reason == "-"          # the raw "Reason:" cell is stored verbatim
 
 
 def test_parse_ytd_termination_and_death_warning():
@@ -102,7 +103,9 @@ def test_parse_ytd_termination_and_death_warning():
     rec = records["2"]
     assert rec.status == "Terminated"
     assert rec.end_date == "20220405"
-    assert any("Death" in w and "status 06" in w for w in warnings)
+    assert rec.reason == "Death"          # raw payroll reason is now stored
+    # Reworded: the app can declare 02 Deceased, no longer "status 06".
+    assert any("Death" in w and "02 Deceased" in w for w in warnings)
 
 
 def test_parse_ytd_integrity_warnings():

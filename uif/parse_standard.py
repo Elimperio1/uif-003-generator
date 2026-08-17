@@ -268,12 +268,13 @@ def parse_ytd(
                 current.status = "Terminated"
             continue
         if first == "Reason:":
+            current.reason = value
             if value.lower() == "death":
                 warnings.append(
                     f"Employee {current.employee_code} "
-                    f"({current.employee_name}): reason is 'Death' — the "
-                    f"declaration uses status 06, the same as any other "
-                    f"termination."
+                    f"({current.employee_name}): reason is 'Death' — "
+                    f"pre-selected as 02 Deceased in Step 4; confirm before "
+                    f"downloading."
                 )
             continue
 

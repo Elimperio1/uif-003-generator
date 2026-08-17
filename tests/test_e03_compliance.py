@@ -9,7 +9,14 @@ is covered by test_generate_003.py.
 import pytest
 
 from uif import uif_ref, validate
-from uif.generate_003 import _field, _q, build, terminations_for_months, to_ascii
+from uif.generate_003 import (
+    _field,
+    _q,
+    build,
+    inferred_status_code,
+    terminations_for_months,
+    to_ascii,
+)
 from uif.models import Company, EmployeeRecord, MatchedRecord, YtdRecord
 
 
@@ -374,3 +381,41 @@ def test_footer_omits_zero_totals_but_keeps_the_record_count():
     assert "8135," not in footer
     assert "8140," not in footer
     assert "8150,0" in footer
+
+
+# --- 8280 status inferred from the payroll "Reason:" (rule 8280) ----------
+
+
+def _death_record(reason="Death", end_date="20250115"):
+    record = _matched(
+        "1", {"id_number": "8306056177085"}, status="Terminated", end_date=end_date
+    )
+    record.ytd.reason = reason
+    return record
+
+
+def test_death_reason_infers_status_02_without_an_override():
+    lines = _lines([_death_record()])
+    assert "8280,02" in lines[1]
+    assert "8270,20250115" in lines[1]
+
+
+def test_afrikaans_death_reason_infers_02():
+    assert "8280,02" in _lines([_death_record(reason="Oorlede")])[1]
+
+
+def test_override_still_wins_over_the_inferred_death_code():
+    lines = _lines([_death_record()], overrides={"1": "16"})
+    assert "8280,16" in lines[1]
+    assert "8280,02" not in lines[1]
+
+
+def test_unknown_reason_falls_back_to_06():
+    assert "8280,06" in _lines([_death_record(reason="Dismissed")])[1]
+
+
+def test_inferred_status_code_maps_only_death():
+    assert inferred_status_code(_death_record()) == "02"
+    assert inferred_status_code(_death_record(reason="dood")) == "02"
+    assert inferred_status_code(_death_record(reason="Dismissed")) is None
+    assert inferred_status_code(_matched("1", {"id_number": "8306056177085"})) is None
