@@ -7,11 +7,12 @@
 _Last updated: 2026-08-17_
 
 ## Now
-- **Branch:** `e03-compliance` at the docs commit on top of six task commits
-  `38f981b`…`b5af249` (A–F), themselves on `e48fac6`. Working tree clean,
-  **8 commits ahead of `origin/main`, not behind**. Branched off
-  `ektief-main`/`cef1435`. **NOT pushed, NOT merged** — waiting on Melton's
-  smoke test.
+- **SHIPPED & LIVE (2026-08-17).** `e03-compliance` (`f148f67`) was
+  smoke-tested, pushed, and fast-forwarded onto `origin/main`
+  (`cef1435..f148f67 e03-compliance -> main`). Prod (Streamlit Cloud, serves
+  `origin/main`) re-clones on the next cold start; the live app returned
+  **HTTP 200** right after the push. `ektief-main` moved to match. The branch
+  survives on the remote as `origin/e03-compliance`. Pushed as **Elimperio1**.
 - **What changed (second pass, 2026-08-17):** findings **10–15** in
   `docs/E03-COMPLIANCE.md` are closed, one commit per finding —
   A `38f981b` SA ID validation (rule 8200 + Appendix B) + 8220-when-invalid;
@@ -19,7 +20,7 @@ _Last updated: 2026-08-17_
   (§4/§5); D `07d09fe` payroll "Reason: Death" → `02 Deceased` (rule 8280);
   E `27b14f3` Step 4 no longer pre-selects `06`; F `b5af249` §8/§9 soft
   warnings (dates, under-15, field lengths). Every new check is warning-only.
-- **Verified so far (automated only — the smoke test has NOT happened):**
+- **Verified (automated + smoke, all passed):**
   suite **151 passed, 2 skipped**; `grep is_corrupted_sa_id` empty; app boots
   headless HTTP 200; and the byte-comparison on the real private workbooks
   (all 12 months × tax years 2022–2027, no overrides) changes in **only** the
@@ -28,7 +29,11 @@ _Last updated: 2026-08-17_
   202302) flips `8280,06` → `8280,02` (finding 13). No `8220` was added on real
   data (every real ID is valid with a matching DOB). Everything else is
   byte-identical.
-- **Smoke-test checklist** (the parts automated tests cannot reach):
+- **Smoke test — PASSED 2026-08-17** (Melton in-browser; also re-run by Claude
+  in Chrome against synthetic PII-free workbooks — empty dropdown, "— not set",
+  the Step-5 gate, death→02 pre-select, the scientific-notation ID warning
+  naming the employee with 8200+8220, and the slash-reference/filename all
+  confirmed). The items that were checked:
   1. Load the two Standard Format workbooks, tax year **2023** — the sheet with
      terminations, so the one that shows the Step-4 panel. Each termination's
      reason dropdown now starts **empty** (no pre-selected `06`).
@@ -51,6 +56,10 @@ _Last updated: 2026-08-17_
      `02 Deceased`** in Step 4.
 
 ## Last shipped
+- `e03-compliance` — the full E03 compliance work (first pass findings 1–9 in
+  `48acab1`, second pass findings 10–15 in `38f981b`…`f148f67`). Fast-forwarded
+  onto `origin/main` on **2026-08-17** (`cef1435..f148f67`); live app HTTP 200
+  after the push. Branch kept at `origin/e03-compliance`.
 - `standard-format` — Standard Format xlsx input (Step 4): `uif/parse_standard.py`
   (detection + employee-master + payroll parsers), per-file dispatch and
   tax-year picker in `streamlit_app.py`, `openpyxl` dep, synthetic-fixture tests
@@ -76,12 +85,15 @@ _Last updated: 2026-08-17_
   contradicts README's "intentionally public-facing". Decide which is right.
 
 ## Next
-- **Smoke-test `e03-compliance` (items 1–7 above), then push + merge** — from
-  `C:\Projects\uif-ektief`:
-  `git push -u origin e03-compliance` →
-  `git checkout ektief-main && git merge --ff-only e03-compliance` →
-  `git push origin ektief-main:main`. That last push is the whole deploy.
-  Nothing is pushed or merged yet; that is Melton's step.
+- **This STATE update still needs to ship.** The deploy already landed, but this
+  file's "shipped + live" edit is uncommitted. Commit it and push from
+  `C:\Projects\uif-ektief`: `git add docs/STATE.md && git commit` then
+  `git push origin e03-compliance:main` (still a clean fast-forward), or just
+  `git push origin HEAD:main` once committed on `e03-compliance`.
+- Optional deeper deploy check: after Cloud finishes re-cloning (a couple of
+  minutes), drive the **live** app once with synthetic workbooks to confirm the
+  new build (not just the shell) is serving — HTTP 200 alone only proves
+  reachability.
 - Still open from the audit: finding #6's wider half — the spec wants details
   for **all** employees monthly "irrespective of whether they are contributors
   or non-contributors", but the app's `gross > 0` inclusion rule omits
