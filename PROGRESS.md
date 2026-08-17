@@ -61,3 +61,34 @@ Design: `docs/superpowers/specs/2026-08-11-standard-format-design.md`
 - Real workbooks moved to `samples/private/standard_*.xlsx` (gitignored);
   synthetic-fixture unit tests + private regression tests added.
 - Sage pipeline and generation rules untouched; all prior tests pass.
+
+## E03 compliance — second audit pass (2026-08-17)
+Status: **awaiting Melton's smoke test** (branch `e03-compliance`, six commits
+`38f981b`…`b5af249`, NOT pushed, NOT merged)
+A second field-by-field audit against the E03 PDF closed findings 10–15
+(`docs/E03-COMPLIANCE.md`). Every new check is **warning-only** — a false
+rejection costs the whole filing.
+- **A** (`38f981b`) — new `uif/sa_id.py`: Appendix B check digit, Excel
+  scientific-notation signature (ID ending in ≥4 zeros), and a `problems()`
+  helper. An invalid `8200` now also writes `8220,"<code>"` (rule 8220), and
+  `validate.py` warns per problem. Also killed a phantom: comments referenced
+  a `is_corrupted_sa_id` that had never been written.
+- **B** (`adc8e2f`) — §5 quote/control-char folding: curly `“ ”` and straight
+  `"` fold to an apostrophe inside quoted fields; CR/LF/TAB/control chars
+  collapse to a space; commas warned about, left unchanged.
+- **C** (`e047386`) — §4/§5 zero-field omission: `8300`/`8310`/`8320` and the
+  footer totals `8130`/`8135`/`8140` drop out when zero; `8150` always stays.
+- **D** (`07d09fe`) — payroll "Reason: Death" now infers `8280 = 02 Deceased`
+  (was thrown away); `models.YtdRecord.reason` added.
+- **E** (`27b14f3`) — Step 4 no longer pre-selects `06`; the selectbox starts
+  empty (death pre-selects `02`), and Step 5 refuses until every termination
+  has a reason.
+- **F** (`b5af249`) — §8/§9 soft warnings: end-before-start, start-in-future,
+  under-15, and over-length email/name/phone. `validate()` gained a
+  `period_yyyymm` argument.
+- **Diff result:** suite **151 passed, 2 skipped**; app boots HTTP 200; the
+  private-workbook byte-comparison changes in only the two spec-required ways —
+  zero currency fields drop from empty-month footers (finding 12), and the one
+  "Reason: Death" employee (code 3, periods 202301 & 202302) flips
+  `8280,06`→`8280,02` (finding 13). No `8220` added on real data. Everything
+  else byte-identical.

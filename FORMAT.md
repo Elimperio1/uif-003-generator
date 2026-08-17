@@ -18,6 +18,13 @@ This spec is verified against two real Sage exports:
 Each record is a single line of comma-separated `<field_code>,<value>` pairs.
 String values are double-quoted; numeric values are not.
 
+Inside a quoted string, curly and straight double quotes fold to an apostrophe
+and control characters (CR, LF, TAB, anything `< 0x20` or `0x7f`) collapse to a
+single space — the delimiter is a double quote and §5 defines no escaping, so an
+embedded quote or newline would corrupt the record. A comma is left as-is (also
+unescaped by the spec); the app warns when a name contains one. See
+`generate_003._sanitise`.
+
 ## Filename
 
 `uuuuuuuu.nnn` (spec §12), where `uuuuuuuu` is the **last 8 digits** of field
@@ -75,8 +82,14 @@ would block good submissions, so they are left unchecked.
 ## Employee record (UIWK)
 
 One per included employee. Field order:
-`8001, 8110, [8200|8210|8220], 8230, 8240, 8250, 8260, [8270], 8280, [8290],
-8300, 8310, 8320`
+`8001, 8110, 8200[, 8220] | 8210 | 8220, 8230, 8240, 8250, 8260, [8270], 8280,
+[8290], [8300], [8310], [8320]`
+
+The identity block is one of: `8200` (SA ID) — plus `8220` when that ID fails
+validation (rule 8220: "mandatory if 8200 or 8210 are invalid"); `8210`
+(passport); or `8220` alone (payroll number, when there is no ID and no
+passport). `8300`, `8310` and `8320` are each omitted when their value is zero
+(§4/§5).
 
 | Code | Description                              | Required  | Example          |
 |------|------------------------------------------|-----------|------------------|
@@ -105,6 +118,13 @@ filled from the employee code. Its presence is what stops a record with no ID
 and no passport being rejected — §9 rejects only when all three are absent —
 so the app warns about a missing ID instead of refusing to build the file.
 
+The SA ID (`8200`) is validated against Appendix B (the check digit) plus an
+Excel scientific-notation signature (a 13-digit ID ending in four or more
+zeros, e.g. `8306060000000`, which passes the check digit yet is corrupt) and a
+date-of-birth cross-check — all warning-only, in `uif.sa_id`. When the ID fails
+any of these, `8220` is written **as well as** `8200`, so the Fund can track the
+contribution while the invalid ID sits in the secondary database.
+
 ### Status codes (field 8280)
 
 The full spec §8 list is in `models.EMPLOYMENT_STATUS_CODES` (01 Active,
@@ -113,11 +133,14 @@ The full spec §8 list is in `models.EMPLOYMENT_STATUS_CODES` (01 Active,
 
 The payroll export only distinguishes "employed" from "no longer employed", so
 it can supply `01` and nothing more specific than `06`. Because `06` is a valid
-code, SARS accepts it silently — and since resignation generally disqualifies
-a UIF claim, a wrong `06` costs the employee their benefit with no error
-anywhere. The app therefore lists every termination in Step 4 and lets the
-filer set the real code per employee; `06` is pre-selected only because it
-preserves the previously verified output.
+code, SARS accepts it silently — and since resignation generally disqualifies a
+UIF claim, a wrong `06` costs the employee their benefit with no error anywhere.
+The app therefore lists every termination in Step 4 and makes the filer choose
+the real code per employee: the selectbox starts **empty**, except where the
+payroll file itself justifies a code — a "Reason: Death" pre-selects `02
+Deceased` (`generate_003.inferred_status_code`). Nothing is generated until
+every termination has a reason. `build()` called with no override still falls
+back to `06`, which is what keeps the byte-comparison and tests stable.
 
 `8270` is written whenever a termination is being declared, **except** for
 codes `01`, `09` and `10` — spec §9 warns when an end date accompanies a status

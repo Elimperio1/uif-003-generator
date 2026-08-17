@@ -4,31 +4,51 @@
 > Full narrative history lives in `PROGRESS.md` (repo root) — read its TAIL
 > only when you need the "why" behind a past decision, never the whole file.
 
-_Last updated: 2026-08-14_
+_Last updated: 2026-08-17_
 
 ## Now
-- **Branch:** `e03-compliance` at `48acab1` — working tree clean, **1 commit
-  ahead of `origin/main`, not behind**. Branched off `ektief-main`/`cef1435`.
-  **NOT pushed, NOT merged** — waiting on Melton's smoke test.
-- **Doing:** E03 spec compliance. 8 of the 9 findings in
-  `docs/E03-COMPLIANCE.md` are closed; #9 deliberately left alone. Each
-  finding in that file now carries a "Fixed —" note saying what was done.
+- **Branch:** `e03-compliance` at the docs commit on top of six task commits
+  `38f981b`…`b5af249` (A–F), themselves on `e48fac6`. Working tree clean,
+  **8 commits ahead of `origin/main`, not behind**. Branched off
+  `ektief-main`/`cef1435`. **NOT pushed, NOT merged** — waiting on Melton's
+  smoke test.
+- **What changed (second pass, 2026-08-17):** findings **10–15** in
+  `docs/E03-COMPLIANCE.md` are closed, one commit per finding —
+  A `38f981b` SA ID validation (rule 8200 + Appendix B) + 8220-when-invalid;
+  B `adc8e2f` quote/control-char folding (§5); C `e047386` zero-field omission
+  (§4/§5); D `07d09fe` payroll "Reason: Death" → `02 Deceased` (rule 8280);
+  E `27b14f3` Step 4 no longer pre-selects `06`; F `b5af249` §8/§9 soft
+  warnings (dates, under-15, field lengths). Every new check is warning-only.
 - **Verified so far (automated only — the smoke test has NOT happened):**
-  suite **123 passed, 2 skipped**; app boots headless HTTP 200; and on the
-  real private workbooks, generating all 12 months for tax years 2023–2025
-  under `cef1435` vs `48acab1` with the same reference and no overrides gives
-  **byte-identical files**. The new rules only fire where the old behaviour
-  was wrong.
+  suite **151 passed, 2 skipped**; `grep is_corrupted_sa_id` empty; app boots
+  headless HTTP 200; and the byte-comparison on the real private workbooks
+  (all 12 months × tax years 2022–2027, no overrides) changes in **only** the
+  two spec-required ways — zero currency fields drop out of empty-month footers
+  (finding 12), and the one "Reason: Death" employee (code 3, periods 202301 &
+  202302) flips `8280,06` → `8280,02` (finding 13). No `8220` was added on real
+  data (every real ID is valid with a matching DOB). Everything else is
+  byte-identical.
 - **Smoke-test checklist** (the parts automated tests cannot reach):
-  1. Load the two Standard Format workbooks, tax year **2023** — the only
-     sheet with terminations, so the only one that shows the new Step-4
-     panel. 4 employees, each with a `06 Resigned` dropdown.
-  2. Change one to `11 Retrenched`; the preview's `Status (8280)` column
-     should follow and the amber "will be declared as 06 Resigned" count drop.
+  1. Load the two Standard Format workbooks, tax year **2023** — the sheet with
+     terminations, so the one that shows the Step-4 panel. Each termination's
+     reason dropdown now starts **empty** (no pre-selected `06`).
+  2. Pick a reason (e.g. `11 Retrenched`); the preview's `Status (8280)` column
+     should follow, showing `— not set` until you choose, and the amber
+     "N will be declared as 06 Resigned" count reflects only the ones you set
+     to `06`.
   3. Enter the UIF reference **with a slash** (`2044084/3`) — the app should
      say it will be sent as `020440843` and the download should be
      `20440843.001`. The old code produced `2044084/3.001`, an invalid name.
   4. Set "Starting file number" above 1 and confirm the filenames follow.
+  5. In the master workbook, mangle one ID to scientific notation in Excel
+     (e.g. format the cell as a number so it shows like `8.5E+12`) and
+     re-upload — confirm the amber warning **names the employee** and the file
+     still generates, with both `8200,<id>` and `8220,"<code>"` on that record.
+  6. Confirm a termination selectbox starts empty and **Step 5 refuses to
+     generate** ("Select a reason … for every employee who has left") until
+     every termination has a reason.
+  7. If the workbook contains a death, confirm it arrives **pre-selected as
+     `02 Deceased`** in Step 4.
 
 ## Last shipped
 - `standard-format` — Standard Format xlsx input (Step 4): `uif/parse_standard.py`
@@ -56,10 +76,12 @@ _Last updated: 2026-08-14_
   contradicts README's "intentionally public-facing". Decide which is right.
 
 ## Next
-- **Smoke-test `e03-compliance`, then push + merge:**
-  `git push origin e03-compliance` →
+- **Smoke-test `e03-compliance` (items 1–7 above), then push + merge** — from
+  `C:\Projects\uif-ektief`:
+  `git push -u origin e03-compliance` →
   `git checkout ektief-main && git merge --ff-only e03-compliance` →
   `git push origin ektief-main:main`. That last push is the whole deploy.
+  Nothing is pushed or merged yet; that is Melton's step.
 - Still open from the audit: finding #6's wider half — the spec wants details
   for **all** employees monthly "irrespective of whether they are contributors
   or non-contributors", but the app's `gross > 0` inclusion rule omits
