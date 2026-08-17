@@ -9,7 +9,7 @@ Returns (blocking_errors, soft_warnings):
 
 from __future__ import annotations
 
-from . import uif_ref
+from . import sa_id, uif_ref
 from .models import (
     CONFIRMED_FULL_REMUNERABLE,
     DEFAULT_NON_CONTRIBUTION_CODE,
@@ -87,6 +87,25 @@ def validate(
                 f"8220. The record is accepted, but the employee cannot claim "
                 f"benefits until a valid ID number is supplied."
             )
+
+        # Spec rule 8200 + Appendix B: an invalid but present ID is a warning,
+        # not a rejection — SARS holds the record in a secondary database and the
+        # employee cannot claim until it is corrected. One warning per problem,
+        # each with the consequence spelled out.
+        if emp.id_number:
+            for reason in sa_id.problems(emp.id_number, emp.date_of_birth):
+                fix = ""
+                if "scientific-notation" in reason:
+                    fix = (
+                        " Fix the Employee Details file (format the ID column as "
+                        "Number, 0 decimals) and re-upload."
+                    )
+                soft.append(
+                    f"{label}: {reason}. SARS accepts the record but flags the "
+                    f"ID invalid, holds it in a secondary database, and the "
+                    f"employee cannot claim until it is corrected.{fix}"
+                )
+
         if not emp.date_of_birth:
             blocking.append(f"{label}: has no date of birth.")
         if not emp.date_engaged:

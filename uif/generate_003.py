@@ -11,7 +11,7 @@ from __future__ import annotations
 import unicodedata
 from decimal import ROUND_HALF_UP, Decimal
 
-from . import uif_ref
+from . import sa_id, uif_ref
 from .models import (
     DEFAULT_NON_CONTRIBUTION_CODE,
     DEFAULT_STATUS_CODE,
@@ -258,6 +258,13 @@ def build(
         # which the employee code always supplies.
         if emp is not None and emp.id_number:
             fields += ["8200", emp.id_number]
+            # Spec rule 8220: "This field is mandatory if fields 8200 or 8210
+            # are invalid or not present." When the ID fails validation the
+            # record is still accepted (as a warning), but 8220 gives the Fund a
+            # payroll number to track the contribution against while the ID sits
+            # in the secondary database. Order: 8200, then 8220, then 8230.
+            if sa_id.problems(emp.id_number, emp.date_of_birth):
+                fields += ["8220", _field("8220", record.employee_code)]
         elif emp is not None and emp.passport_number:
             fields += ["8210", _field("8210", emp.passport_number)]
         else:

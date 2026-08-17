@@ -83,8 +83,8 @@ def _normalise_numeric_string(value) -> str:
 
     Note: for SA IDs that have already been corrupted by Excel's scientific
     notation, the expanded form will contain trailing zeros — that's the
-    exact signature `is_corrupted_sa_id` looks for, so corruption stays
-    detectable downstream.
+    exact signature `uif.sa_id.excel_corruption_signature` looks for, so
+    corruption stays detectable downstream.
     """
     if value is None:
         return ""
@@ -103,8 +103,9 @@ def _normalise_numeric_string(value) -> str:
     if f != f or f == float("inf") or f == float("-inf"):  # NaN/inf guard
         return ""
     # Convert to int and back to string. This expands scientific notation
-    # like "8.30606E+12" -> "8306060000000" (which the corruption detector
-    # will then catch via its trailing-zeros heuristic).
+    # like "8.30606E+12" -> "8306060000000" (which
+    # uif.sa_id.excel_corruption_signature will then catch via its
+    # trailing-zeros heuristic).
     return str(int(f))
 
 

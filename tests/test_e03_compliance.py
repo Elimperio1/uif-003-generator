@@ -27,6 +27,8 @@ def _company(**overrides) -> Company:
     return Company(**base)
 
 
+# The default DOB matches the first six digits of the fixture ID 8306056177085
+# (830605), so sa_id.problems() stays clean unless a test opts into a bad ID.
 def _matched(code, emp_kwargs, status="Employed", earnings=None, end_date=""):
     employee = None
     if emp_kwargs is not None:
@@ -36,7 +38,7 @@ def _matched(code, emp_kwargs, status="Employed", earnings=None, end_date=""):
             first_names=emp_kwargs.get("first_names", "First"),
             id_number=emp_kwargs.get("id_number", ""),
             passport_number=emp_kwargs.get("passport_number", ""),
-            date_of_birth=emp_kwargs.get("date_of_birth", "19840618"),
+            date_of_birth=emp_kwargs.get("date_of_birth", "19830605"),
             date_engaged=emp_kwargs.get("date_engaged", "20140101"),
             end_date=emp_kwargs.get("end_date", ""),
             employee_status=emp_kwargs.get("employee_status", "Normal"),
@@ -295,3 +297,34 @@ def test_paye_reference_shape_is_warned_about():
 @pytest.mark.parametrize("ref", ["020440843", "2044084/3", "20440843"])
 def test_company_validation_accepts_the_real_reference_in_any_form(ref):
     assert validate.validate_company(_company(uif_ref=ref)) == []
+
+
+# --- 8200 / 8220 when the ID is invalid (rule 8200 + rule 8220) ------------
+
+
+def test_invalid_id_emits_both_8200_and_8220():
+    """§8 rule 8220: 'mandatory if fields 8200 or 8210 are invalid or not
+    present'. A present-but-invalid ID keeps 8200 and adds 8220 (the payroll
+    number) so the Fund can track the contribution while the ID is held in the
+    secondary database."""
+    lines = _lines([_matched("0042", {"id_number": "8306060000000"})])  # Excel-mangled
+    body = lines[1]
+    assert "8200,8306060000000" in body
+    assert '8220,"0042"' in body
+    assert body.index("8200,") < body.index("8220,") < body.index("8230,")
+
+
+def test_valid_id_has_no_8220():
+    lines = _lines([_matched("7", {"id_number": "8306056177085"})])
+    assert "8200,8306056177085" in lines[1]
+    assert "8220," not in lines[1]
+
+
+def test_invalid_id_is_a_soft_warning_with_the_consequence_spelled_out():
+    records = [_matched("0042", {"id_number": "8306060000000"})]
+    blocking, soft = validate.validate(records, "February")
+    assert blocking == []
+    warning = next(w for w in soft if "8306060000000" in w)
+    assert "scientific-notation" in warning
+    assert "cannot claim" in warning
+    assert "Number, 0 decimals" in warning       # the Excel fix hint
