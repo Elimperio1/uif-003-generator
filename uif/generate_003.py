@@ -304,22 +304,30 @@ def build(
         if uif_total == 0:
             fields += ["8290", DEFAULT_NON_CONTRIBUTION_CODE]
 
-        fields += [
-            "8300", _fmt(gross),
-            "8310", _fmt(remuneration),
-            "8320", _fmt(uif_total),
-        ]
+        # Spec §4/§5: "If a field is blank or zero it should be omitted from the
+        # SARS format along with its associated code" — the absence implies a
+        # zero. 8290 already carries the reason whenever the contribution is nil.
+        if gross != 0:
+            fields += ["8300", _fmt(gross)]
+        if remuneration != 0:
+            fields += ["8310", _fmt(remuneration)]
+        if uif_total != 0:
+            fields += ["8320", _fmt(uif_total)]
         lines.append(",".join(fields))
 
-    lines.append(",".join([
-        "8002", _q("UIEM"),
-        "8115", _q(ref),
-        "8120", company.paye_ref,
-        "8130", _fmt(round(sum_gross, 2)),
-        "8135", _fmt(round(sum_remuneration, 2)),
-        "8140", _fmt(sum_uif),
-        "8150", str(len(included)),
-        "8160", _field("8160", company.contact_email_footer),
-    ]))
+    footer = ["8002", _q("UIEM"), "8115", _q(ref), "8120", company.paye_ref]
+    total_gross = round(sum_gross, 2)
+    total_remuneration = round(sum_remuneration, 2)
+    # Spec §4/§5: omit each zero total along with its code. 8150 (the record
+    # count) is always written — it is a real count, not a currency field.
+    if total_gross != 0:
+        footer += ["8130", _fmt(total_gross)]
+    if total_remuneration != 0:
+        footer += ["8135", _fmt(total_remuneration)]
+    if sum_uif != 0:
+        footer += ["8140", _fmt(sum_uif)]
+    footer += ["8150", str(len(included))]
+    footer += ["8160", _field("8160", company.contact_email_footer)]
+    lines.append(",".join(footer))
 
     return ("\r\n".join(lines) + "\r\n").encode("ascii", errors="replace")

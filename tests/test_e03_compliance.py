@@ -165,8 +165,13 @@ def test_zero_contribution_carries_a_reason_code():
         _matched("1", {"id_number": "8306056177085"}, earnings={"Severance Pay": 50000.0})
     ]
     lines = _lines(records)
+    # §4/§5: a zero field is omitted with its code. 8310 (remuneration) and 8320
+    # (contribution) are both zero here and drop out; 8300 (the severance gross)
+    # stays, and 8290 carries the reason.
     assert "8290,06" in lines[1]
-    assert "8320,0" in lines[1]
+    assert "8300," in lines[1]
+    assert "8310," not in lines[1]
+    assert "8320," not in lines[1]
 
 
 def test_normal_contribution_omits_the_reason_code():
@@ -356,3 +361,16 @@ def test_comma_in_a_name_warns_but_is_written_unchanged():
     assert any("comma" in w for w in soft)
     lines = _lines(records)
     assert '8230,"Smith, Jr"' in lines[1]         # value not mutated
+
+
+# --- §4/§5 zero-field omission --------------------------------------------
+
+
+def test_footer_omits_zero_totals_but_keeps_the_record_count():
+    """An all-zero (empty) month still writes 8150; the zero currency totals
+    8130/8135/8140 are omitted per §4/§5."""
+    footer = _lines([])[-1]
+    assert "8130," not in footer
+    assert "8135," not in footer
+    assert "8140," not in footer
+    assert "8150,0" in footer
