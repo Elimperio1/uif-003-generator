@@ -113,3 +113,18 @@ Spec `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`; plan
   J pickers, gate, PDF/zip download; form values persist across mode switches.
 - **Verified:** suite 169 passed, 2 skipped; rendered PDF inspected; Chrome run
   on synthetic Standard + Sage fixtures in both modes.
+- **Smoke PASSED by Melton** on `bc253f4`. Follow-up `17ce363` (asked for
+  after the smoke): larger "Start here" card selector for the output mode, and
+  form details kept across mode switches. Headless-Chromium flows showed
+  `bc253f4` lost the leaver reasons and starting file number on a switch, and
+  the first fix lost a field typed just before clicking the switch; `17ce363`
+  (per-mode widget keys seeded from `kept_details` + a harvest of pending
+  `field@mode` values at the top of each run) keeps everything. Melton
+  confirmed it looked good.
+- **Shipped 2026-09-14:** before landing, eDecs output was fingerprinted on
+  `origin/main` vs the branch (216 `.NNN` files with/without 8280 picks, 108
+  validation runs; private Standard workbooks 2022–2027, Standard fixtures,
+  synthetic Sage CSVs) — zero differences. Fast-forwarded onto `origin/main`
+  (`f148f67..fa5636a`) via `_land`, pushed as Elimperio1; live app showed the
+  new selector in logged-in Chrome. `7dbb4b6` (STATE note) pushed to
+  `origin/ui19-pdf` only.
