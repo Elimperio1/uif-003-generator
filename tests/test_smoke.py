@@ -11,5 +11,7 @@ def test_imports():
         "uif.match",
         "uif.generate_003",
         "uif.validate",
+        "uif.ui19",
+        "uif.ui19_pdf",
     ):
         importlib.import_module(name)

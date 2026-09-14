@@ -4,3 +4,6 @@ streamlit>=1.32
 # deploy. Local (3.0.3) and prod (3.0.5) are both on 3.0.x; tests cover that.
 pandas>=3.0,<4
 openpyxl>=3.1
+# UI-19 PDF form output (pure-Python wheels; confirmed for Python 3.14)
+reportlab>=4.4,<6
+pypdf>=6,<7
