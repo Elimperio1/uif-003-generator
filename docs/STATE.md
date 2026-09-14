@@ -4,9 +4,39 @@
 > Full narrative history lives in `PROGRESS.md` (repo root) — read its TAIL
 > only when you need the "why" behind a past decision, never the whole file.
 
-_Last updated: 2026-08-17_
+_Last updated: 2026-09-14_
 
 ## Now
+- **Branch:** `ui19-pdf` (cut from `e03-compliance` `2281bf3`), **NOT pushed,
+  NOT merged — awaiting Melton's smoke test.**
+- **In flight: UI-19 PDF form output mode** (spec
+  `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`, plan
+  `docs/superpowers/plans/2026-09-14-ui19-pdf.md`). An **Output** toggle
+  switches the app between the eDecs `.NNN` file (unchanged) and the official
+  UI-19 PDF, filled using the rules of the standalone script at
+  `C:\Projects\UI19_Automation_7` (its `pdf_writer.py` + layout + official PDF
+  ported into `uif/ui19_pdf.py` / `uif/assets/`; its row rules into
+  `uif/ui19.py`). Commits `79de5ce` parsers · `f07e91e` rules · `ea97f0b` PDF
+  writer · `82e1ba3` app. New deps `reportlab>=4.4,<6`, `pypdf>=6,<7`
+  (pure-Python wheels, confirmed for Python 3.14).
+- **Each mode keeps its own rules** — UI-19 declares starters/leavers in the
+  month even if unpaid, takes UIF Yes/No from UIF status (Standard Format: the
+  UIF column), dates prefer Employee Details. Approved deviations from the
+  script: H prefilled from the Step 4 reason (leading zero dropped), J picker
+  per non-contributor per month (6 preselected when no pay), `mt` added to the
+  title list, passport-overflow warning.
+- **Verified by Claude (supporting evidence, not sign-off):** suite **169
+  passed, 2 skipped** (incl. the private Standard regression); rendered sample
+  PDF inspected — values land in their boxes, 7 rows → 2 pages; Chrome run on
+  synthetic Standard + Sage fixtures: both modes, H gate, zip download button,
+  values kept across mode switches, eDecs still excludes the unpaid leaver.
+- **Smoke checklist for Melton:** a real month in UI-19 mode — open the PDF and
+  compare to the payroll; a real **Sage CSV** pair to confirm the
+  "Unemployment insurance fund" row and "Average working hours per period" are
+  read (no Sage CSV sample exists locally); eDecs output for the same month
+  unchanged.
+
+## Previously shipped (e03-compliance)
 - **SHIPPED & LIVE (2026-08-17).** `e03-compliance` (`f148f67`) was
   smoke-tested, pushed, and fast-forwarded onto `origin/main`
   (`cef1435..f148f67 e03-compliance -> main`). Prod (Streamlit Cloud, serves
@@ -29,31 +59,12 @@ _Last updated: 2026-08-17_
   202302) flips `8280,06` → `8280,02` (finding 13). No `8220` was added on real
   data (every real ID is valid with a matching DOB). Everything else is
   byte-identical.
-- **Smoke test — PASSED 2026-08-17** (Melton in-browser; also re-run by Claude
-  in Chrome against synthetic PII-free workbooks — empty dropdown, "— not set",
-  the Step-5 gate, death→02 pre-select, the scientific-notation ID warning
-  naming the employee with 8200+8220, and the slash-reference/filename all
-  confirmed). The items that were checked:
-  1. Load the two Standard Format workbooks, tax year **2023** — the sheet with
-     terminations, so the one that shows the Step-4 panel. Each termination's
-     reason dropdown now starts **empty** (no pre-selected `06`).
-  2. Pick a reason (e.g. `11 Retrenched`); the preview's `Status (8280)` column
-     should follow, showing `— not set` until you choose, and the amber
-     "N will be declared as 06 Resigned" count reflects only the ones you set
-     to `06`.
-  3. Enter the UIF reference **with a slash** (`2044084/3`) — the app should
-     say it will be sent as `020440843` and the download should be
-     `20440843.001`. The old code produced `2044084/3.001`, an invalid name.
-  4. Set "Starting file number" above 1 and confirm the filenames follow.
-  5. In the master workbook, mangle one ID to scientific notation in Excel
-     (e.g. format the cell as a number so it shows like `8.5E+12`) and
-     re-upload — confirm the amber warning **names the employee** and the file
-     still generates, with both `8200,<id>` and `8220,"<code>"` on that record.
-  6. Confirm a termination selectbox starts empty and **Step 5 refuses to
-     generate** ("Select a reason … for every employee who has left") until
-     every termination has a reason.
-  7. If the workbook contains a death, confirm it arrives **pre-selected as
-     `02 Deceased`** in Step 4.
+- **Smoke test — PASSED 2026-08-17** (Melton in-browser + a Claude-in-Chrome
+  re-run on synthetic PII-free workbooks): empty termination dropdown, preview
+  `— not set`, the Step-5 gate refusing until every leaver is set, death
+  pre-selected `02 Deceased`, the scientific-notation ID warning naming the
+  employee with `8200`+`8220`, and the slash-reference → `001234567` /
+  `01234567.001` filename all confirmed.
 
 ## Last shipped
 - `e03-compliance` — the full E03 compliance work (first pass findings 1–9 in
@@ -85,15 +96,18 @@ _Last updated: 2026-08-17_
   contradicts README's "intentionally public-facing". Decide which is right.
 
 ## Next
-- **This STATE update still needs to ship.** The deploy already landed, but this
-  file's "shipped + live" edit is uncommitted. Commit it and push from
-  `C:\Projects\uif-ektief`: `git add docs/STATE.md && git commit` then
-  `git push origin e03-compliance:main` (still a clean fast-forward), or just
-  `git push origin HEAD:main` once committed on `e03-compliance`.
-- Optional deeper deploy check: after Cloud finishes re-cloning (a couple of
-  minutes), drive the **live** app once with synthetic workbooks to confirm the
-  new build (not just the shell) is serving — HTTP 200 alone only proves
-  reachability.
+- Smoke-test `ui19-pdf` (checklist above), then push + fast-forward onto
+  `origin/main` via a temp branch at `origin/main`.
+- Suggested, not built (2026-09-14): a reconciliation line explaining why the
+  UI-19 and `.NNN` employee counts differ; retire/freeze the standalone UI19
+  script once live (it only adds Sage **PDF** input); Company Details PDF
+  auto-fill for the UI-19 employer fields.
+- Optional deeper deploy check: drive the **live** app once with synthetic
+  workbooks to confirm the new build (not just the shell) is serving — HTTP 200
+  alone only proves reachability.
+- Parked for Melton's call: wire `Dismissed → 04` (Afrikaans `ontslaan`) into
+  `generate_003.inferred_status_code` — deferred because it would change the
+  no-override output; reconcile README "public" vs Cloud "private" setting.
 - Still open from the audit: finding #6's wider half — the spec wants details
   for **all** employees monthly "irrespective of whether they are contributors
   or non-contributors", but the app's `gross > 0` inclusion rule omits
@@ -104,6 +118,18 @@ _Last updated: 2026-08-17_
   objects.
 
 ## Open flags
+- **UI-19 layout quirks are the script's, kept on purpose:** the UIF ref's
+  check digit overflows into the branch-number box; termination dates sit a
+  little wider than the printed D D M M Y Y headings.
+- **pypdf page trap:** adding pages from ONE `PdfReader` of the blank form
+  shares their content stream, so every overlay lands on every page.
+  `ui19_pdf.write_pdf` opens a fresh reader per page — keep it that way
+  (`test_each_page_carries_only_its_own_rows` guards it).
+- **`2281bf3` (STATE "shipped" note) is on `origin/e03-compliance` and local
+  `ektief-main` but NOT on `origin/main`** — deliberate. It is docs-only, so it
+  was kept off `main` to avoid a needless Cloud redeploy. `ektief-main` therefore
+  reads `[ahead 1]` of `origin/main`; that is expected, not drift. The functional
+  deploy on `origin/main` is `f148f67`.
 - **The E03 check digit cannot validate Elimperio's own reference.** Appendix A
   reproduces its worked example exactly (`2648757` → check digit 7) but
   publishes multipliers for a **6-digit base only**; `2044084/3` has 7, and

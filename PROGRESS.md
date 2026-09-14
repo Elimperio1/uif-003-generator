@@ -92,3 +92,24 @@ rejection costs the whole filing.
   "Reason: Death" employee (code 3, periods 202301 & 202302) flips
   `8280,06`→`8280,02` (finding 13). No `8220` added on real data. Everything
   else byte-identical.
+
+## UI-19 PDF form output (2026-09-14)
+Status: **awaiting Melton's smoke test** (branch `ui19-pdf`, NOT pushed, NOT merged)
+Spec `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`; plan
+`docs/superpowers/plans/2026-09-14-ui19-pdf.md`.
+- Output toggle: eDecs `.NNN` (unchanged) or the official UI-19 PDF, built with
+  the standalone `UI19_Automation_7` script's rules.
+- `79de5ce` — parsers keep what the UI-19 needs: Sage YTD "From:" date and the
+  "Unemployment insurance fund" deduction row; Employee Details raw name, full
+  names, average hours; Standard Format UIF column + `uif_status_reported=False`.
+  All new model fields defaulted — eDecs output untouched.
+- `f07e91e` — `uif/ui19.py`: script inclusion (paid / UIF deducted / started or
+  left in month), name split, dates, contributor Yes/No, warnings; H/J code
+  application.
+- `ea97f0b` — `uif/ui19_pdf.py` + `uif/assets/`: the script's writer returning
+  bytes. Found and fixed a pypdf trap (one reader for all pages repeats every
+  row on every page).
+- `82e1ba3` — app wiring: UI-19 Steps 2–5, H pickers shared with eDecs keys,
+  J pickers, gate, PDF/zip download; form values persist across mode switches.
+- **Verified:** suite 169 passed, 2 skipped; rendered PDF inspected; Chrome run
+  on synthetic Standard + Sage fixtures in both modes.
