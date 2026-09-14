@@ -144,6 +144,9 @@ class YtdRecord:
     reason: str = ""             # raw "Reason:" text from the payroll sheet, if any
     # month name -> {earning line-item name -> amount}
     earnings: dict[str, dict[str, float]] = field(default_factory=dict)
+    start_date: str = ""         # "From:" date from the status line, YYYYMMDD (UI-19)
+    # month name -> employee UIF deduction; empty when the report has no UIF line (UI-19)
+    uif_deducted: dict[str, float] = field(default_factory=dict)
 
     def gross(self, month: str) -> float:
         """Total earnings for the given month."""
@@ -172,6 +175,10 @@ class EmployeeRecord:
     end_date: str                # 8270, YYYYMMDD — "" if not terminated
     employee_status: str         # "Normal" / "Terminated"
     uif_status: str              # "Contributes" / "Excluded" / ...
+    employee_name: str = ""               # raw "Employee name" (Title Initials Surname), UI-19
+    full_names: str = ""                  # raw full first names, UI-19 initials
+    average_hours: float | None = None    # "Average working hours per period", UI-19
+    uif_status_reported: bool = True      # False when uif_status is an assumed default
 
 
 @dataclass

@@ -135,6 +135,15 @@ def parse_id_number(value) -> str:
     return digits
 
 
+def parse_hours(value: str) -> float | None:
+    """'173.33' / '173,33' -> 173.33; blank or unreadable -> None."""
+    text = (value or "").replace("\xa0", "").replace(" ", "").replace(",", ".")
+    try:
+        return float(text) if text else None
+    except ValueError:
+        return None
+
+
 def _ddmmyyyy_to_yyyymmdd(value: str) -> str:
     """'05/06/1983' -> '19830605'. Returns '' if not parseable."""
     match = re.search(r"(\d{2})/(\d{2})/(\d{4})", value)
@@ -180,7 +189,7 @@ def parse(file_bytes: bytes) -> dict[str, EmployeeRecord]:
         for label in (
             "Employee code", "Employee name", "Full names", "ID number",
             "Passport number", "Date of birth", "Date Engaged", "End date",
-            "Employee status", "UIF status",
+            "Employee status", "UIF status", "Average working hours per period",
         ):
             for r in block_rows:
                 value = _value_for(r, label)
@@ -203,6 +212,9 @@ def parse(file_bytes: bytes) -> dict[str, EmployeeRecord]:
             end_date=_ddmmyyyy_to_yyyymmdd(fields["End date"]),
             employee_status=fields["Employee status"].strip(),
             uif_status=fields["UIF status"].strip(),
+            employee_name=fields["Employee name"].strip(),
+            full_names=fields["Full names"].strip(),
+            average_hours=parse_hours(fields["Average working hours per period"]),
         )
 
     for row in rows:

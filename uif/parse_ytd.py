@@ -13,8 +13,9 @@ The report is a block-structured layout, one block per employee:
     ...
 
 A header row near the top maps month names to (irregular) column indices.
-We only need the Earnings section: every line item, per month, so that both
-gross and UIF-remunerable earnings can be derived later.
+We need the Earnings section: every line item, per month, so that both
+gross and UIF-remunerable earnings can be derived later. The UI-19 form also
+uses the Deductions section's "Unemployment insurance fund" row.
 """
 
 from __future__ import annotations
@@ -92,6 +93,12 @@ def _parse_status(text: str) -> tuple[str, str]:
     return status, end_date
 
 
+def _parse_from_date(text: str) -> str:
+    """The 'From:' date in a 'Status: ...' cell as YYYYMMDD, or ''."""
+    match = re.search(r"From:\s*(\d{4}/\d{2}/\d{2})", text)
+    return _slash_date_to_yyyymmdd(match.group(1)) if match else ""
+
+
 def parse(file_bytes: bytes) -> dict[str, YtdRecord]:
     """Parse the YTD CSV into {employee_code: YtdRecord}."""
     text = _decode(file_bytes)
@@ -133,6 +140,7 @@ def parse(file_bytes: bytes) -> dict[str, YtdRecord]:
             joined = " ".join(row)
             if "Status:" in joined:
                 current.status, current.end_date = _parse_status(joined)
+                current.start_date = _parse_from_date(joined)
                 continue
             # No status row present; fall through to normal handling.
 
@@ -147,5 +155,15 @@ def parse(file_bytes: bytes) -> dict[str, YtdRecord]:
                     current.earnings[month][first] = (
                         current.earnings[month].get(first, 0.0) + amount
                     )
+
+        if (
+            section == "Deductions"
+            and not current.uif_deducted
+            and first.lower().startswith("unemployment insurance fund")
+        ):
+            current.uif_deducted = {
+                month: _num(row[col]) if col < len(row) else 0.0
+                for month, col in month_cols.items()
+            }
 
     return records

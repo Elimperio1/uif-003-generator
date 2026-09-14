@@ -180,6 +180,8 @@ def parse_employees(file_bytes: bytes) -> dict[str, EmployeeRecord]:
             end_date=end_date,
             employee_status="Terminated" if end_date else "Normal",
             uif_status="Contributes",
+            full_names=_text(cell(row, "name")),
+            uif_status_reported=False,   # no UIF status column: "Contributes" is assumed
         )
     return records
 
@@ -300,6 +302,11 @@ def parse_ytd(
                     current.earnings[month][earning_name] = (
                         current.earnings[month].get(earning_name, 0.0) + amount
                     )
+
+            if uif1_col is not None:
+                current.uif_deducted[month] = (
+                    _num(row[uif1_col]) if uif1_col < len(row) else 0.0
+                )
 
             label = (
                 f"Employee {current.employee_code} "

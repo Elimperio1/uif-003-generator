@@ -4,6 +4,7 @@ from uif.parse_employees import (
     _ddmmyyyy_to_yyyymmdd,
     extract_surname,
     parse,
+    parse_hours,
 )
 
 SAMPLE_EMPLOYEES = (
@@ -20,6 +21,7 @@ SAMPLE_EMPLOYEES = (
     "Date Engaged,,24/08/2023,,,,,End date,,,,,,,,,\r\n"
     "Tax status,,Statutory Tables,,,,,Employee status,,,,Normal,,,,,\r\n"
     "UIF status,,Contributes,,,,,,,,,,,,,,\r\n"
+    "Average working hours per period,,173.33,,,,,Rate per day,,,,,,,,,\r\n"
     "Personal Details,,,,,,,,,,,,,,,,\r\n"
     "Employee code,12.00,,,,,,,,,,,,,,,\r\n"
     "Employee name,R van Wyk,,,,,,,,,,,,,,,\r\n"
@@ -66,3 +68,18 @@ def test_parse_extracts_passport_employee_with_end_date():
     assert emp.date_engaged == "20220515"
     assert emp.end_date == "20241224"
     assert emp.employee_status == "Terminated"
+
+
+def test_parse_keeps_raw_names_and_hours():
+    records = parse(SAMPLE_EMPLOYEES.encode("cp1252"))
+    assert records["7"].employee_name == "Mr J Sample"
+    assert records["7"].full_names == "Jane"
+    assert records["7"].average_hours == 173.33
+    assert records["12"].average_hours is None
+    assert records["7"].uif_status_reported is True
+
+
+def test_parse_hours_accepts_comma_decimal_and_blank():
+    assert parse_hours("173,33") == 173.33
+    assert parse_hours("") is None
+    assert parse_hours("n/a") is None

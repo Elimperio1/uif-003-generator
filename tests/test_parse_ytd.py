@@ -79,3 +79,18 @@ def test_parse_reads_employee_block_and_earnings():
     assert record.gross("January") == 2000.0
     # February: nothing
     assert record.gross("February") == 0.0
+
+
+def test_parse_reads_start_date_and_uif_deduction():
+    record = parse(SAMPLE_YTD.encode("cp1252"))["7"]
+    assert record.start_date == "20200101"
+    assert record.uif_deducted["March"] == 14.0
+    assert record.uif_deducted["January"] == 20.0
+    assert record.uif_deducted["April"] == 0.0
+
+
+def test_parse_without_uif_line_leaves_uif_deducted_empty():
+    no_uif = SAMPLE_YTD.replace(
+        "Unemployment insurance fund,,14.00,,0,,,0,0,0,0,0,0,0,,0,20.00,0,34.00\r\n", ""
+    )
+    assert parse(no_uif.encode("cp1252"))["7"].uif_deducted == {}

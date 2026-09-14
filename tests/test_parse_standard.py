@@ -187,3 +187,12 @@ def test_standard_pair_through_existing_pipeline():
     footer = lines[2]
     assert footer.startswith('8002,"UIEM"')
     assert "8150,1" in footer
+
+
+def test_standard_ui19_fields():
+    emp = parse_standard.parse_employees(build_master_workbook())["1"]
+    assert emp.full_names == "Petrus Johannes"
+    assert emp.uif_status_reported is False
+    rec = parse_standard.parse_ytd(build_payroll_workbook(), "2025")[0]["1"]
+    assert rec.uif_deducted["March"] == 100.0
+    assert rec.uif_deducted["April"] == 75.0
