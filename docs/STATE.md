@@ -7,9 +7,19 @@
 _Last updated: 2026-09-14_
 
 ## Now
-- **Branch:** `ui19-pdf` (cut from `e03-compliance` `2281bf3`), **NOT pushed,
-  NOT merged — awaiting Melton's smoke test.**
-- **In flight: UI-19 PDF form output mode** (spec
+- **SHIPPED & LIVE (2026-09-14).** `ui19-pdf` fast-forwarded onto
+  `origin/main` (`f148f67..fa5636a`, via a `_land` branch at `origin/main`),
+  pushed as Elimperio1; branch kept at `origin/ui19-pdf`; `ektief-main` moved
+  to `fa5636a`. The live app (logged-in Chrome) shows the new "Start here"
+  selector, so the build — including the new `reportlab`/`pypdf` deps —
+  installed and booted on Cloud. Melton smoke-tested both `bc253f4` and the
+  selector/persistence follow-up `17ce363`.
+- **eDecs proven unchanged before landing:** `generate_003.build` (default and
+  picked 8280 overrides) + `validate` + parse warnings fingerprinted on
+  `origin/main` vs the branch — 216 files / 108 validation runs across the
+  private Standard workbooks (every sheet 2022–2027, every month), the
+  Standard fixtures and the synthetic Sage CSVs: **zero differences**.
+- **UI-19 PDF form output mode** (spec
   `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`, plan
   `docs/superpowers/plans/2026-09-14-ui19-pdf.md`). An **Output** toggle
   switches the app between the eDecs `.NNN` file (unchanged) and the official
@@ -104,8 +114,9 @@ _Last updated: 2026-09-14_
   contradicts README's "intentionally public-facing". Decide which is right.
 
 ## Next
-- Smoke-test `ui19-pdf` (checklist above), then push + fast-forward onto
-  `origin/main` via a temp branch at `origin/main`.
+- First real UI-19 filing from a **Sage CSV** pair: confirm the "Unemployment
+  insurance fund" row and "Average working hours per period" come through
+  (never seen in a real CSV on this machine).
 - Suggested, not built (2026-09-14): a reconciliation line explaining why the
   UI-19 and `.NNN` employee counts differ; retire/freeze the standalone UI19
   script once live (it only adds Sage **PDF** input); Company Details PDF
