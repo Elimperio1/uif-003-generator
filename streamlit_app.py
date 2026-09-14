@@ -172,6 +172,44 @@ body, [data-testid="stAppViewContainer"] {
     transform: translateY(-1px);
 }
 
+/* Output mode picker: large cards so the choice is obvious up front --------*/
+.st-key-output_mode [role="radiogroup"] {
+    gap: 1rem !important;
+    flex-wrap: wrap;
+}
+.st-key-output_mode [role="radiogroup"] > label {
+    flex: 1 1 16rem;
+    align-items: flex-start;
+    padding: 1rem 1.25rem !important;
+    margin: 0 !important;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-soft);
+    cursor: pointer;
+    transition: border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.st-key-output_mode [role="radiogroup"] > label:hover {
+    border-color: var(--accent);
+}
+.st-key-output_mode [role="radiogroup"] > label:has(input:checked) {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px oklch(0.42 0.10 255 / 0.25);
+    background: var(--bg);
+}
+.st-key-output_mode [role="radiogroup"] > label [data-testid="stMarkdownContainer"] p {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text);
+}
+.st-key-output_mode [role="radiogroup"] > label [data-testid="stCaptionContainer"] p,
+.st-key-output_mode [role="radiogroup"] > label small {
+    font-size: 0.92rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
 /* Multiselect chips --------------------------------------------------------*/
 [data-baseweb="tag"] {
     background: oklch(0.94 0.04 255) !important;
@@ -236,6 +274,32 @@ def section(eyebrow: str, title: str) -> None:
     )
 
 
+# Details typed in one output mode must survive a switch to the other, but
+# Streamlit drops a widget's state on any run that doesn't draw it. So every
+# form widget gets a per-mode key and is seeded from this plain dict, which
+# each run writes back to.
+def kept() -> dict:
+    return st.session_state.setdefault("kept_details", {})
+
+
+def mode_key(field: str) -> str:
+    return f"{field}@{st.session_state.get('output_mode', '')}"
+
+
+def kept_text_input(container, label: str, field: str) -> str:
+    value = container.text_input(label, value=kept().get(field, ""), key=mode_key(field))
+    kept()[field] = value
+    return value
+
+
+# Before anything is drawn: a value typed just before clicking the mode switch
+# arrives in the same run as the switch, when its widget is no longer drawn.
+# Harvest every per-mode widget value into the store first so none is lost.
+for _key, _value in list(st.session_state.items()):
+    if "@" in _key and _value is not None:
+        kept()[_key.split("@", 1)[0]] = _value
+
+
 def termination_picker(record: MatchedRecord, end_date: str) -> str | None:
     """Reason-for-leaving selectbox (8280 codes), shared by both output modes."""
     emp = record.employee
@@ -258,15 +322,20 @@ def termination_picker(record: MatchedRecord, end_date: str) -> str | None:
         f"</span></p>",
         unsafe_allow_html=True,
     )
-    return right.selectbox(
+    field = f"status_8280_{record.employee_code}"
+    chosen = kept().get(field) or inferred
+    selected = right.selectbox(
         f"Reason for {record.employee_code}",
         status_options,
-        index=status_options.index(inferred) if inferred else None,
+        index=status_options.index(chosen) if chosen else None,
         placeholder="Select the reason for leaving",
         format_func=lambda code: f"{code} — {EMPLOYMENT_STATUS_CODES[code]}",
-        key=f"status_8280_{record.employee_code}",
+        key=mode_key(field),
         label_visibility="collapsed",
     )
+    if selected is not None:
+        kept()[field] = selected
+    return selected
 
 
 def pick_months() -> list[str]:
@@ -275,25 +344,14 @@ def pick_months() -> list[str]:
     months = st.multiselect(
         "Each selected month produces one declaration file.",
         TAX_YEAR_MONTHS,
-        key="months",
+        default=kept().get("months", []),
+        key=mode_key("months"),
     )
+    kept()["months"] = months
     if not months:
         st.info("Select at least one month.")
         st.stop()
     return months
-
-
-# Form fields shown in only one output mode lose their value on a run that
-# doesn't render them; re-assigning keeps them for the whole session.
-_PERSISTED_KEYS = (
-    "uif_ref", "paye_ref", "contact_name", "contact_phone", "email_header",
-    "email_footer", "submission_mode", "trading_name", "cipro_no", "branch_no",
-    "fax_no", "physical_address", "postal_address", "work_address",
-    "decl_name", "decl_id", "months",
-)
-for _key in _PERSISTED_KEYS:
-    if _key in st.session_state:
-        st.session_state[_key] = st.session_state[_key]
 
 
 # ---------------------------------------------------------------------------
@@ -337,14 +395,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+section("Start here", "What do you want to produce?")
 output_mode = st.radio(
     "Output",
     ["eDecs file (.NNN)", "UI-19 PDF form"],
+    captions=[
+        "Electronic declaration file to upload to SARS uFiling.",
+        "The official UI-19 form, filled in, to sign and send to Labour.",
+    ],
     horizontal=True,
     key="output_mode",
-    help="eDecs: the electronic declaration file for uFiling. UI-19: the "
-         "official form, filled in, to sign and send to the Department of "
-         "Employment and Labour.",
+    label_visibility="collapsed",
 )
 ui19_mode = output_mode == "UI-19 PDF form"
 
@@ -477,25 +538,25 @@ for warning in standard_warnings:
 def run_ui19_steps(ytd_data, emp_data, tax_year_end: int) -> None:
     """Employer details, month pick, preview with H/J codes, PDF download."""
     cfg_left, cfg_right = st.columns(2, gap="large")
-    uif_ref = cfg_left.text_input("UIF reference number", key="uif_ref")
-    trading_name = cfg_right.text_input("Trading name", key="trading_name")
-    paye_ref = cfg_left.text_input("PAYE reference number", key="paye_ref")
-    cipro_no = cfg_right.text_input("Company registration (CIPRO) number", key="cipro_no")
-    branch_no = cfg_left.text_input("Branch number", key="branch_no")
-    authorised = cfg_right.text_input("Authorised person", key="contact_name")
-    phone = cfg_left.text_input("Telephone number", key="contact_phone")
-    email = cfg_right.text_input("Email address", key="email_header")
-    fax = cfg_left.text_input("Fax number", key="fax_no")
-    physical = st.text_input("Physical address", key="physical_address")
-    postal = st.text_input("Postal address", key="postal_address")
-    work = st.text_input(
-        "Work address (if different to the physical address)", key="work_address"
+    uif_ref = kept_text_input(cfg_left, "UIF reference number", "uif_ref")
+    trading_name = kept_text_input(cfg_right, "Trading name", "trading_name")
+    paye_ref = kept_text_input(cfg_left, "PAYE reference number", "paye_ref")
+    cipro_no = kept_text_input(cfg_right, "Company registration (CIPRO) number", "cipro_no")
+    branch_no = kept_text_input(cfg_left, "Branch number", "branch_no")
+    authorised = kept_text_input(cfg_right, "Authorised person", "contact_name")
+    phone = kept_text_input(cfg_left, "Telephone number", "contact_phone")
+    email = kept_text_input(cfg_right, "Email address", "email_header")
+    fax = kept_text_input(cfg_left, "Fax number", "fax_no")
+    physical = kept_text_input(st, "Physical address", "physical_address")
+    postal = kept_text_input(st, "Postal address", "postal_address")
+    work = kept_text_input(
+        st, "Work address (if different to the physical address)", "work_address"
     )
     decl_left, decl_right = st.columns(2, gap="large")
-    decl_name = decl_left.text_input(
-        "Declaration: name of the person signing", key="decl_name"
+    decl_name = kept_text_input(
+        decl_left, "Declaration: name of the person signing", "decl_name"
     )
-    decl_id = decl_right.text_input("Declaration: their ID number", key="decl_id")
+    decl_id = kept_text_input(decl_right, "Declaration: their ID number", "decl_id")
 
     missing = [
         name for name, value in
@@ -572,7 +633,8 @@ def run_ui19_steps(ytd_data, emp_data, tax_year_end: int) -> None:
             unsafe_allow_html=True,
         )
         for month, row in non_contributors:
-            default = ui19.default_non_contributor_reason(row)
+            field = f"ui19_j_{periods[month]}_{row.employee_code}"
+            chosen = kept().get(field) or ui19.default_non_contributor_reason(row)
             left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
             left.markdown(
                 f"<p style='margin:0;'><strong>{row.employee_code}</strong> — "
@@ -583,13 +645,14 @@ def run_ui19_steps(ytd_data, emp_data, tax_year_end: int) -> None:
             selected = right.selectbox(
                 f"Non-contribution reason for {row.employee_code} in {month}",
                 reason_options,
-                index=reason_options.index(default) if default else None,
+                index=reason_options.index(chosen) if chosen else None,
                 placeholder="Select the reason for non-contribution",
                 format_func=lambda c: f"{c}: {ui19.NON_CONTRIBUTOR_REASONS[c]}",
-                key=f"ui19_j_{periods[month]}_{row.employee_code}",
+                key=mode_key(field),
                 label_visibility="collapsed",
             )
             if selected is not None:
+                kept()[field] = selected
                 j_overrides[month][row.employee_code] = selected
         st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -699,17 +762,22 @@ if ui19_mode:
     st.stop()
 
 cfg_left, cfg_right = st.columns(2, gap="large")
-uif_ref = cfg_left.text_input("UIF reference number", key="uif_ref")
-paye_ref = cfg_right.text_input("PAYE reference number", key="paye_ref")
-contact_name = cfg_left.text_input("Filer contact name", key="contact_name")
-contact_phone = cfg_right.text_input("Filer contact phone", key="contact_phone")
-email_header = cfg_left.text_input("Contact email (file header)", key="email_header")
-email_footer = cfg_right.text_input(
-    "Contact email (file footer, defaults to header)", key="email_footer"
+uif_ref = kept_text_input(cfg_left, "UIF reference number", "uif_ref")
+paye_ref = kept_text_input(cfg_right, "PAYE reference number", "paye_ref")
+contact_name = kept_text_input(cfg_left, "Filer contact name", "contact_name")
+contact_phone = kept_text_input(cfg_right, "Filer contact phone", "contact_phone")
+email_header = kept_text_input(cfg_left, "Contact email (file header)", "email_header")
+email_footer = kept_text_input(
+    cfg_right, "Contact email (file footer, defaults to header)", "email_footer"
 )
+_submission_modes = ["LIVE", "TEST"]
 submission_mode = cfg_left.selectbox(
-    "Submission mode", ["LIVE", "TEST"], key="submission_mode"
+    "Submission mode",
+    _submission_modes,
+    index=_submission_modes.index(kept().get("submission_mode", "LIVE")),
+    key=mode_key("submission_mode"),
 )
+kept()["submission_mode"] = submission_mode
 
 _required = {
     "UIF reference number": uif_ref,
@@ -880,18 +948,20 @@ st.markdown(
     "earlier one entirely** — so a second batch under this reference must "
     "start above the highest number already submitted."
 )
+_max_start = 1000 - len(ordered_months)
 start_number = int(
     st.number_input(
         "Starting file number",
         min_value=1,
-        max_value=1000 - len(ordered_months),
-        value=1,
+        max_value=_max_start,
+        value=min(kept().get("start_sequence", 1), _max_start),
         step=1,
-        key="start_sequence",
+        key=mode_key("start_sequence"),
         help="Numbers run consecutively from here, one per selected month, "
              "in March-first order.",
     )
 )
+kept()["start_sequence"] = start_number
 
 files: dict[str, bytes] = {}
 for sequence, month in enumerate(ordered_months, start=start_number):
