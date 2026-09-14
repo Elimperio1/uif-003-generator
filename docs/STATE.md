@@ -7,12 +7,22 @@
 _Last updated: 2026-09-14_
 
 ## Now
-- **Branch:** `ui19-pdf` at `7dbb4b6`; `origin/main` = `ektief-main` = `fa5636a`.
-  `ui19-pdf` is 1 docs-only commit ahead of `main` (the STATE "shipped" note),
-  pushed to `origin/ui19-pdf` and deliberately kept off `main` to avoid a
-  needless Cloud redeploy. Nothing behind `origin/main`.
-- **Doing:** nothing in flight — UI-19 PDF output is shipped and live. This
-  `/pause` leaves `docs/STATE.md` + `PROGRESS.md` uncommitted (see Open flags).
+- **Branch:** `sage-pdf-input`, cut from local `ui19-pdf` (`e952ded`, the
+  `/pause` docs commit, NOT pushed) which is docs-only ahead of `origin/main`
+  (`fa5636a`). Feature commit on top. **NOT pushed, NOT merged.**
+- **Doing:** **Sage PDF input for the UI-19 form — awaiting Melton's smoke
+  test.** The standalone script's own input (Year to Date Detail + Employee
+  Details PDFs, optional Company Details PDF) now works in the app's UI-19
+  mode. `uif/parse_sage_pdf.py` = the script's PDF readers, adapted to
+  `YtdRecord`/`EmployeeRecord`. New dep `pdfplumber>=0.11,<0.12`. Detail in
+  `PROGRESS.md` (tail).
+- **Smoke checklist for Melton:** UI-19 mode with a real **Employee Details
+  PDF** + YTD PDF (never seen here — IDs, dates, hours, UIF status must come
+  through), and a real **Company Details PDF** (fills empty fields only, UIF
+  contact from the right-hand column); eDecs mode still works with CSV/xlsx and
+  refuses PDFs; details survive switching modes back and forth.
+- **Local servers:** `localhost:8501` = this branch (restart it after any edit;
+  a long-running dev server served stale code this session).
 
 ## Last shipped
 - `ui19-pdf` — **UI-19 PDF form output mode** (2026-09-14). "Start here" card
@@ -41,14 +51,22 @@ _Last updated: 2026-09-14_
   a deploy signal). README says "intentionally public-facing". Decide which.
 
 ## Next
-- _(fill in — what's the next task?)_
+- Smoke-test `sage-pdf-input` (checklist under Now), then land it the usual way
+  (temp `_land` branch at `origin/main`, fast-forward, push as Elimperio1).
+  The branch carries the docs-only `e952ded` too — harmless.
+- **Decide: CSV employee-code collision (likely live bug, not fixed).**
+  `parse_employee_code` strips leading zeros, and real Sage reports hold
+  distinct employees `026`/`0026` (seen in the PDFs). If a Sage CSV prints both,
+  the second record overwrites the first in `parse_ytd`/`parse_employees` and
+  one employee silently drops out of the eDecs file and UI-19. No Sage CSV on
+  this machine to confirm what the CSV prints. Fixing it changes eDecs output.
 - First real UI-19 filing from a **Sage CSV** pair: confirm the "Unemployment
   insurance fund" row and "Average working hours per period" are read (never
   seen in a real CSV on this machine).
 - Suggested, not built: a reconciliation line explaining why UI-19 and `.NNN`
-  employee counts differ; freeze/retire the standalone UI19 script (it only
-  adds Sage **PDF** input — the app's UI-19 mode reads CSV/xlsx); Company
-  Details PDF auto-fill for the UI-19 employer fields.
+  employee counts differ; freeze/retire the standalone UI19 script once the
+  PDF input is live (the app then covers everything it does except the xlsx
+  working copy).
 - Parked for Melton's call: `Dismissed → 04` (`ontslaan`) in
   `generate_003.inferred_status_code` (changes no-override output); README
   "public" vs Cloud "private".
@@ -59,11 +77,13 @@ _Last updated: 2026-09-14_
   fully merged — safe to delete.
 
 ## Open flags
-- **Uncommitted:** this `/pause` refresh of `docs/STATE.md` and the matching
-  fold into `PROGRESS.md`. Commit to `ui19-pdf` / push `origin/ui19-pdf` only —
-  not `main` (docs-only, avoids a redeploy).
-- **Local Streamlit server may still be running** on `localhost:8501` (started
-  this session from `ui19-pdf`). Stop it if the port is needed.
+- **Form-state harvest reads only the last-drawn keys** (`drawn_suffix`, set in
+  `mode_key`). Widget keys of a mode not drawn since linger in session state
+  with old values; harvesting them all made persistence depend on key order.
+  Don't widen the harvest back to every `@` key.
+- **PDF reports pair only with PDFs.** PDF codes are kept as printed; the
+  CSV/xlsx parsers normalise leading zeros. Don't normalise the PDF side to
+  "allow mixing" — it merges distinct employees.
 - **Each output mode follows its own rules — keep it that way.** eDecs = E03
   spec (`generate_003` / `validate`); UI-19 = the standalone script's rules
   (unpaid starters/leavers included, UIF Yes/No from status, script layout

@@ -1,12 +1,14 @@
 """
 UIF-ektief — Streamlit app entry point.
 
-Takes two payroll exports (Sage CSVs or Standard Format workbooks) plus a
-company-config form and produces one or more downloadable SARS UIF declaration
-files, one per selected month of the tax year.
+Takes two payroll exports (Sage CSVs or Standard Format workbooks; for the
+UI-19 form also the Sage report PDFs) plus a company-config form and produces
+one or more downloadable SARS UIF declaration files, one per selected month of
+the tax year.
 No authentication: the app is stateless and processes everything in memory.
 """
 
+import hashlib
 import io
 import zipfile
 
@@ -17,6 +19,7 @@ from uif import (
     generate_003,
     match,
     parse_employees,
+    parse_sage_pdf,
     parse_standard,
     parse_ytd,
     ui19,
@@ -283,7 +286,13 @@ def kept() -> dict:
 
 
 def mode_key(field: str) -> str:
-    return f"{field}@{st.session_state.get('output_mode', '')}"
+    # The "~N" generation suffix appears once code rewrites stored details (the
+    # Company Details PDF): new keys make every widget re-seed from kept(), the
+    # same way a mode switch does. Generation 0 keeps the original key.
+    generation = st.session_state.get("form_generation", 0)
+    suffix = st.session_state.get("output_mode", "") + (f"~{generation}" if generation else "")
+    st.session_state["drawn_suffix"] = suffix  # what the harvest below reads next run
+    return f"{field}@{suffix}"
 
 
 def kept_text_input(container, label: str, field: str) -> str:
@@ -294,9 +303,13 @@ def kept_text_input(container, label: str, field: str) -> str:
 
 # Before anything is drawn: a value typed just before clicking the mode switch
 # arrives in the same run as the switch, when its widget is no longer drawn.
-# Harvest every per-mode widget value into the store first so none is lost.
+# Harvest the last-drawn widgets' values into the store first so none is lost.
+# Only those widgets: keys of a mode (or generation) not drawn since linger in
+# session state with old values, and reading them made the result depend on
+# key order (an edit in one mode could be undone by a switch back).
+_drawn_suffix = st.session_state.get("drawn_suffix")
 for _key, _value in list(st.session_state.items()):
-    if "@" in _key and _value is not None:
+    if "@" in _key and _value is not None and _key.split("@", 1)[1] == _drawn_suffix:
         kept()[_key.split("@", 1)[0]] = _value
 
 
@@ -368,6 +381,17 @@ def _parse_employees(data: bytes):
     return parse_employees.parse(data)
 
 
+@st.cache_data(show_spinner="Reading the Year to Date Detail PDF...")
+def _parse_pdf_ytd(data: bytes):
+    records, warnings = parse_sage_pdf.parse_ytd(data)
+    return records, parse_sage_pdf.tax_year_end_year(data), warnings
+
+
+@st.cache_data(show_spinner="Reading the Employee Details PDF...")
+def _parse_pdf_employees(data: bytes):
+    return parse_sage_pdf.parse_employees(data)
+
+
 @st.cache_data(show_spinner=False)
 def _list_year_sheets(data: bytes):
     return parse_standard.list_year_sheets(data)
@@ -423,24 +447,66 @@ st.markdown(
     "**Number** with 0 decimals, and save. That stops Excel mangling SA ID "
     "numbers into scientific notation."
 )
+if ui19_mode:
+    st.markdown(
+        "For the UI-19 form you can also drop in the **Sage report PDFs** "
+        "instead: Year to Date Detail and Employee Details, both as PDFs. A "
+        "Company Details PDF fills in the employer details below."
+    )
 
+# The uploaders accept PDFs in both modes, so switching mode never clears an
+# uploaded file; the eDecs path refuses PDFs further down.
 col1, col2 = st.columns(2, gap="large")
 with col1:
     ytd_file = st.file_uploader(
         "Year to Date Detail",
-        type=["csv", "xlsx"],
+        type=["csv", "xlsx", "pdf"],
         key="ytd_upload",
-        help="Sage 'Year to Date Detail' CSV, or a Standard Format payroll "
-             "workbook (.xlsx) with one sheet per tax year.",
+        help="Sage 'Year to Date Detail' CSV or PDF (PDF: UI-19 form only), or "
+             "a Standard Format payroll workbook (.xlsx) with one sheet per tax year.",
     )
 with col2:
     emp_file = st.file_uploader(
         "Employee Details",
-        type=["csv", "xlsx"],
+        type=["csv", "xlsx", "pdf"],
         key="emp_upload",
-        help="Sage 'Employee Details' CSV, or the Standard Format employee "
-             "master workbook (.xlsx) with an 'Employee details' sheet.",
+        help="Sage 'Employee Details' CSV or PDF (PDF: UI-19 form only), or the "
+             "Standard Format employee master workbook (.xlsx) with an "
+             "'Employee details' sheet.",
     )
+
+# UI-19 employer details: filled from a Company Details PDF, once per file,
+# and only into fields that are still empty. Bumping form_generation re-keys
+# the form widgets so the drawn inputs pick up the new values.
+if ui19_mode:
+    company_file = st.file_uploader(
+        "Company Details (optional)",
+        type=["pdf"],
+        key="company_upload",
+        help="Sage 'Company Details' report PDF. Fills in the trading name, "
+             "reference numbers, addresses and UIF contact.",
+    )
+    if company_file is not None:
+        company_bytes = company_file.getvalue()
+        company_digest = hashlib.sha256(company_bytes).hexdigest()
+        if parse_sage_pdf.report_kind(company_bytes) != "company_details":
+            st.error("That PDF is not a Sage 'Company Details' report.")
+        elif st.session_state.get("company_pdf_applied") != company_digest:
+            filled = []
+            for field, value in parse_sage_pdf.parse_company(company_bytes).items():
+                if not kept().get(field, "").strip():
+                    kept()[field] = value
+                    filled.append(field)
+            if filled:
+                st.session_state["form_generation"] = st.session_state.get("form_generation", 0) + 1
+            st.session_state["company_pdf_applied"] = company_digest
+            st.session_state["company_pdf_filled"] = len(filled)
+        if st.session_state.get("company_pdf_applied") == company_digest:
+            st.caption(
+                f"Company Details PDF read: filled "
+                f"{st.session_state.get('company_pdf_filled', 0)} empty employer "
+                f"field(s). Fields you had already typed were left alone."
+            )
 
 if not (ytd_file and emp_file):
     st.markdown(
@@ -458,61 +524,95 @@ if not (ytd_file and emp_file):
 ytd_bytes = ytd_file.getvalue()
 emp_bytes = emp_file.getvalue()
 standard_warnings: list[str] = []
+ytd_is_pdf = parse_sage_pdf.is_pdf(ytd_bytes)
+emp_is_pdf = parse_sage_pdf.is_pdf(emp_bytes)
 
-try:
-    if parse_standard.detect_format(ytd_bytes) == "standard":
-        year_sheets = _list_year_sheets(ytd_bytes)
-        if not year_sheets:
+if ytd_is_pdf or emp_is_pdf:
+    if not ui19_mode:
+        st.error(
+            "PDF reports only work for the UI-19 PDF form. For the eDecs file, "
+            "upload the Sage CSV exports or the Standard Format workbooks."
+        )
+        st.stop()
+    if not (ytd_is_pdf and emp_is_pdf):
+        # PDF codes are kept as printed ("026" and "0026" are different
+        # employees); the CSV parsers drop leading zeros, so the two can't join.
+        st.error(
+            "Upload both reports as PDFs, or both as CSV/xlsx. A PDF report "
+            "can't be matched against a CSV or workbook."
+        )
+        st.stop()
+    expected = {"Year to Date Detail": (ytd_bytes, "ytd"),
+                "Employee Details": (emp_bytes, "employee_details")}
+    for label, (data, kind) in expected.items():
+        if parse_sage_pdf.report_kind(data) != kind:
             st.error(
-                "This workbook has no year sheets (tabs named like '2025'). "
-                "Is it the payroll workbook?"
+                f"The {label} PDF is not a Sage '{label}' report. Check the two "
+                f"files are in the right boxes."
             )
             st.stop()
-        if len(year_sheets) > 1:
-            sheet = st.selectbox(
-                "Tax year",
-                year_sheets,
-                index=None,
-                placeholder="Select the tax year",
-                format_func=lambda name: f"February {name}",
-                key="std_year_sheet",
-            )
-            if sheet is None:
-                st.info("Select the tax year to continue.")
-                st.stop()
-        else:
-            sheet = year_sheets[0]
-        ytd_data, standard_warnings = _parse_standard_ytd(ytd_bytes, sheet)
-        tax_year_end = parse_standard.tax_year_end_year(sheet)
-        hint = parse_standard.read_company_header(ytd_bytes, sheet)
-        hint_bits = [
-            part for part in (
-                hint["company"],
-                f"PAYE {hint['paye']}" if hint["paye"] else "",
-                f"UIF {hint['uif']}" if hint["uif"] else "",
-            ) if part
-        ]
-        if hint_bits:
-            st.markdown(
-                f"<p style='color:var(--text-muted);'>Workbook header: "
-                f"{' · '.join(hint_bits)}. Enter the official reference "
-                f"numbers below; nothing is auto-filled.</p>",
-                unsafe_allow_html=True,
-            )
-    else:
-        ytd_data, tax_year_end = _parse_ytd(ytd_bytes)
-except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not read the payroll file: {exc}")
-    st.stop()
+    try:
+        ytd_data, tax_year_end, standard_warnings = _parse_pdf_ytd(ytd_bytes)
+        emp_data = _parse_pdf_employees(emp_bytes)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Could not read the PDF reports: {exc}")
+        st.stop()
 
-try:
-    if parse_standard.detect_format(emp_bytes) == "standard":
-        emp_data = _parse_standard_employees(emp_bytes)
-    else:
-        emp_data = _parse_employees(emp_bytes)
-except Exception as exc:  # noqa: BLE001
-    st.error(f"Could not read the employee details file: {exc}")
-    st.stop()
+else:
+    try:
+        if parse_standard.detect_format(ytd_bytes) == "standard":
+            year_sheets = _list_year_sheets(ytd_bytes)
+            if not year_sheets:
+                st.error(
+                    "This workbook has no year sheets (tabs named like '2025'). "
+                    "Is it the payroll workbook?"
+                )
+                st.stop()
+            if len(year_sheets) > 1:
+                sheet = st.selectbox(
+                    "Tax year",
+                    year_sheets,
+                    index=None,
+                    placeholder="Select the tax year",
+                    format_func=lambda name: f"February {name}",
+                    key="std_year_sheet",
+                )
+                if sheet is None:
+                    st.info("Select the tax year to continue.")
+                    st.stop()
+            else:
+                sheet = year_sheets[0]
+            ytd_data, standard_warnings = _parse_standard_ytd(ytd_bytes, sheet)
+            tax_year_end = parse_standard.tax_year_end_year(sheet)
+            hint = parse_standard.read_company_header(ytd_bytes, sheet)
+            hint_bits = [
+                part for part in (
+                    hint["company"],
+                    f"PAYE {hint['paye']}" if hint["paye"] else "",
+                    f"UIF {hint['uif']}" if hint["uif"] else "",
+                ) if part
+            ]
+            if hint_bits:
+                st.markdown(
+                    f"<p style='color:var(--text-muted);'>Workbook header: "
+                    f"{' · '.join(hint_bits)}. Enter the official reference "
+                    f"numbers below; nothing is auto-filled.</p>",
+                    unsafe_allow_html=True,
+                )
+        else:
+            ytd_data, tax_year_end = _parse_ytd(ytd_bytes)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Could not read the payroll file: {exc}")
+        st.stop()
+
+    try:
+        if parse_standard.detect_format(emp_bytes) == "standard":
+            emp_data = _parse_standard_employees(emp_bytes)
+        else:
+            emp_data = _parse_employees(emp_bytes)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Could not read the employee details file: {exc}")
+        st.stop()
 
 matched, match_warnings = match.join(ytd_data, emp_data)
 

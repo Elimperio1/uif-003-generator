@@ -34,7 +34,15 @@ standalone UI19 script's rules, not the eDecs rules: leavers and starters in
 the month are declared even if unpaid, and the UIF contributor Yes/No comes
 from the UIF status. Columns H and J take the reasons picked in Step 4.
 
-No data is stored. CSVs are processed in memory and discarded when the browser
+This mode also takes the **Sage report PDFs**, the standalone script's own
+input: Year to Date Detail and Employee Details, **both** as PDFs (a PDF
+can't be paired with a CSV: PDF employee codes keep their leading zeros, and
+Sage can have distinct employees `026` and `0026`). An optional Company
+Details PDF fills the empty employer fields. The eDecs file refuses PDFs: the
+YTD PDF has only the earnings total, not the line items its remuneration
+rules need.
+
+No data is stored. Uploads are processed in memory and discarded when the browser
 tab closes. No authentication: the app is intentionally public-facing.
 
 ## Local development

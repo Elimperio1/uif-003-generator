@@ -94,7 +94,7 @@ rejection costs the whole filing.
   else byte-identical.
 
 ## UI-19 PDF form output (2026-09-14)
-Status: **awaiting Melton's smoke test** (branch `ui19-pdf`, NOT pushed, NOT merged)
+Status: **shipped and live 2026-09-14** (see the last bullet)
 Spec `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`; plan
 `docs/superpowers/plans/2026-09-14-ui19-pdf.md`.
 - Output toggle: eDecs `.NNN` (unchanged) or the official UI-19 PDF, built with
@@ -128,3 +128,36 @@ Spec `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`; plan
   (`f148f67..fa5636a`) via `_land`, pushed as Elimperio1; live app showed the
   new selector in logged-in Chrome. `7dbb4b6` (STATE note) pushed to
   `origin/ui19-pdf` only.
+
+## Sage PDF input for the UI-19 form (2026-09-14)
+Status: **awaiting Melton's smoke test** (branch `sage-pdf-input`, NOT pushed, NOT merged)
+Bounded change, design approved in chat (no spec/plan doc): the standalone
+script's own input, the Sage report PDFs, now works in the app's UI-19 mode.
+- `uif/parse_sage_pdf.py` — the script's `parse_ytd_detail`,
+  `parse_employee_detail`, `parse_company_detail` and page tests, regexes
+  unchanged, reading bytes; adapters to `YtdRecord` / `EmployeeRecord` so
+  `ui19.form_rows` runs as-is. `page.close()` per page: 68-page report peak
+  ~213 MB -> ~8 MB. New dep `pdfplumber>=0.11,<0.12` (3.14 wheels checked).
+- **Codes kept as printed.** Parity on the real PDFs first failed: Sage has
+  distinct employees `026`/`0026`, `045`/`0045`, `01`/`001`, and the CSV
+  parsers' leading-zero normalisation merged them (one record overwrote the
+  other). So PDF pairs with PDF only; a PDF + CSV mix is refused.
+- App: uploaders take `.pdf`; eDecs refuses PDFs (YTD PDF has only the
+  earnings TOTAL); wrong-box / non-Sage PDFs refused; optional Company Details
+  PDF fills **empty** employer fields once per file.
+- Pre-fill needed new widget keys (a redrawn text input ignores a changed
+  `value=`): a `~N` generation suffix on `mode_key`, bumped by the fill.
+- **Found and fixed a latent bug from `17ce363`:** the top-of-run harvest read
+  every `field@mode` key, but keys of a mode not drawn since linger with old
+  values, so the result depended on key order. On this branch an edit in UI-19
+  was undone by switching back to eDecs (prod passes only by key order). The
+  harvest now reads only the keys of the last-drawn mode/generation
+  (`drawn_suffix`, recorded by `mode_key`).
+- **Verified (supporting evidence, not sign-off):** suite 181 passed, 2
+  skipped (12 new); parity vs the standalone script on 3 real YTD PDFs, all 36
+  month forms, 636 rows: zero differences; headless-Chromium flows 23/23
+  (both modes, fill keeps typed values, switches before/after a fill, un-entered
+  typing before a switch, H/J, download, mixed/swapped refusals, real 68-page
+  YTD in 8.6 s); mode-switch flow 3/3. No tracked eDecs module changed.
+- **Not verifiable here:** no real Employee Details or Company Details PDF on
+  this machine; those readers are proven only on synthetic PDFs.

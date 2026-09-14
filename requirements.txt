@@ -7,3 +7,7 @@ openpyxl>=3.1
 # UI-19 PDF form output (pure-Python wheels; confirmed for Python 3.14)
 reportlab>=4.4,<6
 pypdf>=6,<7
+# Sage report PDF input for the UI-19 form (the standalone script's reader).
+# Its deps (pdfminer.six, pypdfium2, Pillow, cryptography) all have Python 3.14
+# wheels for Cloud's manylinux x86_64, checked with pip download.
+pdfplumber>=0.11,<0.12
