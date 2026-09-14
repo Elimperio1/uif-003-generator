@@ -7,16 +7,18 @@
 _Last updated: 2026-09-14_
 
 ## Now
-- **Branch:** `sage-pdf-input`, cut from local `ui19-pdf` (`e952ded`, the
-  `/pause` docs commit, NOT pushed) which is docs-only ahead of `origin/main`
-  (`fa5636a`). Feature commit on top. **NOT pushed, NOT merged.**
-- **Doing:** **Sage PDF input for the UI-19 form — awaiting Melton's smoke
-  test.** The standalone script's own input (Year to Date Detail + Employee
+- **Branch:** `sage-pdf-input`, fast-forwarded onto `origin/main` 2026-09-14
+  (`fa5636a..` this commit), branch also pushed to `origin/sage-pdf-input`.
+- **Doing:** **Sage PDF input for the UI-19 form — LIVE BUT NOT SMOKE-TESTED.**
+  Merged before any smoke test **at Melton's explicit request**, so a colleague
+  who has the real Employee Details / Company Details PDFs can test it on the
+  live app (Melton has none). Treat the colleague's run as the smoke test; if
+  it fails, fix forward or revert the merge. The standalone script's own input (Year to Date Detail + Employee
   Details PDFs, optional Company Details PDF) now works in the app's UI-19
   mode. `uif/parse_sage_pdf.py` = the script's PDF readers, adapted to
   `YtdRecord`/`EmployeeRecord`. New dep `pdfplumber>=0.11,<0.12`. Detail in
   `PROGRESS.md` (tail).
-- **Smoke checklist for Melton:** UI-19 mode with a real **Employee Details
+- **Smoke checklist (for the colleague, on the live app):** UI-19 mode with a real **Employee Details
   PDF** + YTD PDF (never seen here — IDs, dates, hours, UIF status must come
   through), and a real **Company Details PDF** (fills empty fields only, UIF
   contact from the right-hand column); eDecs mode still works with CSV/xlsx and
@@ -51,9 +53,8 @@ _Last updated: 2026-09-14_
   a deploy signal). README says "intentionally public-facing". Decide which.
 
 ## Next
-- Smoke-test `sage-pdf-input` (checklist under Now), then land it the usual way
-  (temp `_land` branch at `origin/main`, fast-forward, push as Elimperio1).
-  The branch carries the docs-only `e952ded` too — harmless.
+- Get the colleague's smoke result on the live Sage PDF input (checklist under
+  Now) and record it here and in `PROGRESS.md`.
 - **Decide: CSV employee-code collision (likely live bug, not fixed).**
   `parse_employee_code` strips leading zeros, and real Sage reports hold
   distinct employees `026`/`0026` (seen in the PDFs). If a Sage CSV prints both,

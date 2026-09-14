@@ -130,7 +130,9 @@ Spec `docs/superpowers/specs/2026-09-14-ui19-pdf-design.md`; plan
   `origin/ui19-pdf` only.
 
 ## Sage PDF input for the UI-19 form (2026-09-14)
-Status: **awaiting Melton's smoke test** (branch `sage-pdf-input`, NOT pushed, NOT merged)
+Status: **merged to `main` and live 2026-09-14, NOT smoke-tested** (merged at Melton's
+explicit request so a colleague with the real Employee Details / Company Details
+PDFs can test it on the live app; Melton has none)
 Bounded change, design approved in chat (no spec/plan doc): the standalone
 script's own input, the Sage report PDFs, now works in the app's UI-19 mode.
 - `uif/parse_sage_pdf.py` — the script's `parse_ytd_detail`,
