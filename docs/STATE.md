@@ -30,6 +30,14 @@ _Last updated: 2026-09-14_
   PDF inspected — values land in their boxes, 7 rows → 2 pages; Chrome run on
   synthetic Standard + Sage fixtures: both modes, H gate, zip download button,
   values kept across mode switches, eDecs still excludes the unpaid leaver.
+- **Smoke PASSED by Melton (2026-09-14)** on `bc253f4`. He then asked for a
+  larger mode selector and for details to persist across mode switches:
+  `17ce363` (NOT yet smoke-tested). Persistence = per-mode widget keys seeded
+  from `st.session_state["kept_details"]`, plus a harvest of pending
+  `field@mode` values at the top of every run. Headless-Chromium flows showed
+  the previous commit lost the H reasons and starting file number on a switch;
+  `17ce363` keeps everything, including a field typed just before clicking the
+  switch.
 - **Smoke checklist for Melton:** a real month in UI-19 mode — open the PDF and
   compare to the payroll; a real **Sage CSV** pair to confirm the
   "Unemployment insurance fund" row and "Average working hours per period" are
