@@ -88,7 +88,8 @@ For declared month `M` of calendar year `Y` (from `period_code`):
    `6` when gross is 0, otherwise empty. Blank for `YES` / unknown.
 10. **Warnings (script's, per month):** employees not found in Employee
     Details; missing ID/passport; contributor undetermined; hours missing
-    when no employee record exists. *Addition (approved):* ID/passport
+    only when there is no Employee Details data at all (so never in the app,
+    which requires that upload — the script's own condition). *Addition (approved):* ID/passport
     longer than the 13 form boxes (the writer truncates it).
 11. **Name titles.** *Deviation:* `mt` added to the script's title list —
     the app already fixed "Mt N Langeni" for eDecs; the script would print
