@@ -13,12 +13,22 @@ import zipfile
 import pandas as pd
 import streamlit as st
 
-from uif import generate_003, match, parse_employees, parse_standard, parse_ytd, validate
+from uif import (
+    generate_003,
+    match,
+    parse_employees,
+    parse_standard,
+    parse_ytd,
+    ui19,
+    ui19_pdf,
+    validate,
+)
 from uif import uif_ref as uif_ref_rules  # `uif_ref` is also a form field below
 from uif.models import (
     EMPLOYMENT_STATUS_CODES,
     TAX_YEAR_MONTHS,
     Company,
+    MatchedRecord,
     period_code,
 )
 
@@ -226,6 +236,66 @@ def section(eyebrow: str, title: str) -> None:
     )
 
 
+def termination_picker(record: MatchedRecord, end_date: str) -> str | None:
+    """Reason-for-leaving selectbox (8280 codes), shared by both output modes."""
+    emp = record.employee
+    name = (
+        f"{emp.first_names} {emp.surname}".strip()
+        if emp
+        else record.ytd.employee_name
+    )
+    # No default: a pre-selected 06 with an amber count is exactly what gets
+    # clicked past, and a wrong 06 silently costs an ex-employee their claim.
+    # The one exception is a code the payroll file itself justifies — a
+    # death — which arrives pre-selected as 02 Deceased for confirmation.
+    inferred = generate_003.inferred_status_code(record)
+    status_options = list(EMPLOYMENT_STATUS_CODES)
+    left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
+    left.markdown(
+        f"<p style='margin:0;'><strong>{record.employee_code}</strong> — "
+        f"{name}<br><span style='color:var(--text-muted);font-size:0.85rem;'>"
+        f"left {end_date or 'date unknown'}"
+        f"</span></p>",
+        unsafe_allow_html=True,
+    )
+    return right.selectbox(
+        f"Reason for {record.employee_code}",
+        status_options,
+        index=status_options.index(inferred) if inferred else None,
+        placeholder="Select the reason for leaving",
+        format_func=lambda code: f"{code} — {EMPLOYMENT_STATUS_CODES[code]}",
+        key=f"status_8280_{record.employee_code}",
+        label_visibility="collapsed",
+    )
+
+
+def pick_months() -> list[str]:
+    """Step 3, shared by both output modes. Stops the run until one is picked."""
+    section("Step 3", "Pick the months")
+    months = st.multiselect(
+        "Each selected month produces one declaration file.",
+        TAX_YEAR_MONTHS,
+        key="months",
+    )
+    if not months:
+        st.info("Select at least one month.")
+        st.stop()
+    return months
+
+
+# Form fields shown in only one output mode lose their value on a run that
+# doesn't render them; re-assigning keeps them for the whole session.
+_PERSISTED_KEYS = (
+    "uif_ref", "paye_ref", "contact_name", "contact_phone", "email_header",
+    "email_footer", "submission_mode", "trading_name", "cipro_no", "branch_no",
+    "fax_no", "physical_address", "postal_address", "work_address",
+    "decl_name", "decl_id", "months",
+)
+for _key in _PERSISTED_KEYS:
+    if _key in st.session_state:
+        st.session_state[_key] = st.session_state[_key]
+
+
 # ---------------------------------------------------------------------------
 # Parsing (cached on file bytes)
 # ---------------------------------------------------------------------------
@@ -266,6 +336,17 @@ st.markdown(
     "the months you need, download.</p>",
     unsafe_allow_html=True,
 )
+
+output_mode = st.radio(
+    "Output",
+    ["eDecs file (.NNN)", "UI-19 PDF form"],
+    horizontal=True,
+    key="output_mode",
+    help="eDecs: the electronic declaration file for uFiling. UI-19: the "
+         "official form, filled in, to sign and send to the Department of "
+         "Employment and Labour.",
+)
+ui19_mode = output_mode == "UI-19 PDF form"
 
 # ---------------------------------------------------------------------------
 # Upload section
@@ -389,10 +470,233 @@ for warning in standard_warnings:
     st.warning(warning)
 
 # ---------------------------------------------------------------------------
+# UI-19 output mode (Steps 2-5). Follows the standalone UI19 script's rules
+# (uif/ui19.py); none of the eDecs validation below applies to it.
+# ---------------------------------------------------------------------------
+
+def run_ui19_steps(ytd_data, emp_data, tax_year_end: int) -> None:
+    """Employer details, month pick, preview with H/J codes, PDF download."""
+    cfg_left, cfg_right = st.columns(2, gap="large")
+    uif_ref = cfg_left.text_input("UIF reference number", key="uif_ref")
+    trading_name = cfg_right.text_input("Trading name", key="trading_name")
+    paye_ref = cfg_left.text_input("PAYE reference number", key="paye_ref")
+    cipro_no = cfg_right.text_input("Company registration (CIPRO) number", key="cipro_no")
+    branch_no = cfg_left.text_input("Branch number", key="branch_no")
+    authorised = cfg_right.text_input("Authorised person", key="contact_name")
+    phone = cfg_left.text_input("Telephone number", key="contact_phone")
+    email = cfg_right.text_input("Email address", key="email_header")
+    fax = cfg_left.text_input("Fax number", key="fax_no")
+    physical = st.text_input("Physical address", key="physical_address")
+    postal = st.text_input("Postal address", key="postal_address")
+    work = st.text_input(
+        "Work address (if different to the physical address)", key="work_address"
+    )
+    decl_left, decl_right = st.columns(2, gap="large")
+    decl_name = decl_left.text_input(
+        "Declaration: name of the person signing", key="decl_name"
+    )
+    decl_id = decl_right.text_input("Declaration: their ID number", key="decl_id")
+
+    missing = [
+        name for name, value in
+        {"UIF reference number": uif_ref, "Trading name": trading_name}.items()
+        if not value.strip()
+    ]
+    if missing:
+        st.info("Still need: " + ", ".join(missing) + ".")
+        st.stop()
+
+    employer = ui19_pdf.Employer(
+        uif_employer_ref=uif_ref.strip(),
+        trading_name=trading_name.strip(),
+        branch_no=branch_no.strip(),
+        paye_ref=paye_ref.strip(),
+        cipro_no=cipro_no.strip(),
+        physical_address=physical.strip(),
+        work_address=work.strip(),
+        postal_address=postal.strip(),
+        email=email.strip(),
+        fax_no=fax.strip(),
+        phone_no=phone.strip(),
+        authorised_person=authorised.strip(),
+        declaration_employer_name=decl_name.strip(),
+        declaration_employer_id_number=decl_id.strip(),
+    )
+
+    months = pick_months()
+
+    section("Step 4", "Preview")
+    ordered_months = sorted(months, key=TAX_YEAR_MONTHS.index)
+    periods = {month: period_code(month, tax_year_end) for month in ordered_months}
+    month_rows = {
+        month: ui19.form_rows(ytd_data, emp_data, month, periods[month])
+        for month in ordered_months
+    }
+
+    # Column H: the same picks, and widget keys, as the eDecs Step 4.
+    leavers: dict[str, ui19.FormRow] = {}
+    for month in ordered_months:
+        for row in month_rows[month][0]:
+            if ui19.needs_termination_reason(row, periods[month]):
+                leavers.setdefault(row.employee_code, row)
+    status_overrides: dict[str, str] = {}
+    if leavers:
+        st.markdown(
+            f"<p style='margin-bottom:0.75rem;'><strong>{len(leavers)} "
+            f"employee(s) have left.</strong> Column H of the UI-19 needs the "
+            f"reason for termination. The payroll file cannot tell a "
+            f"resignation from a retrenchment, so confirm each one.</p>",
+            unsafe_allow_html=True,
+        )
+        for code, row in leavers.items():
+            record = MatchedRecord(code, emp_data.get(code), ytd_data[code])
+            selected = termination_picker(record, row.termination_date)
+            if selected is not None:
+                status_overrides[code] = selected
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+    # Column J: one pick per non-contributor per month.
+    reason_options = list(ui19.NON_CONTRIBUTOR_REASONS)
+    j_overrides: dict[str, dict[str, str]] = {month: {} for month in ordered_months}
+    non_contributors = [
+        (month, row)
+        for month in ordered_months
+        for row in month_rows[month][0]
+        if row.uif_contributor == "NO"
+    ]
+    if non_contributors:
+        st.markdown(
+            f"<p style='margin-bottom:0.75rem;'><strong>{len(non_contributors)} "
+            f"non-contributor row(s).</strong> Column J needs the reason for "
+            f"non-contribution.</p>",
+            unsafe_allow_html=True,
+        )
+        for month, row in non_contributors:
+            default = ui19.default_non_contributor_reason(row)
+            left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
+            left.markdown(
+                f"<p style='margin:0;'><strong>{row.employee_code}</strong> — "
+                f"{row.initials} {row.surname}<br><span style='color:var(--text-muted);"
+                f"font-size:0.85rem;'>{month} {periods[month][:4]}</span></p>",
+                unsafe_allow_html=True,
+            )
+            selected = right.selectbox(
+                f"Non-contribution reason for {row.employee_code} in {month}",
+                reason_options,
+                index=reason_options.index(default) if default else None,
+                placeholder="Select the reason for non-contribution",
+                format_func=lambda c: f"{c}: {ui19.NON_CONTRIBUTOR_REASONS[c]}",
+                key=f"ui19_j_{periods[month]}_{row.employee_code}",
+                label_visibility="collapsed",
+            )
+            if selected is not None:
+                j_overrides[month][row.employee_code] = selected
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+    for month in ordered_months:
+        rows, warnings = month_rows[month]
+        ui19.apply_codes(rows, periods[month], status_overrides, j_overrides[month])
+        with st.expander(
+            f"{month} {periods[month][:4]} — {len(rows)} employee(s)",
+            expanded=(len(months) == 1),
+        ):
+            if rows:
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "Code": r.employee_code,
+                            "Surname": r.surname,
+                            "Initials": r.initials,
+                            "ID / Passport": r.id_number,
+                            "Gross": r.gross,
+                            "Hours": r.hours_worked,
+                            "Start": r.commencement_date,
+                            "End": r.termination_date,
+                            "H": r.termination_reason_code,
+                            "UIF": r.uif_contributor,
+                            "J": r.non_contributor_reason_code,
+                        }
+                        for r in rows
+                    ]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.markdown(
+                    "<p style='color:var(--text-muted);'>No employees on the "
+                    "payroll this month.</p>",
+                    unsafe_allow_html=True,
+                )
+            for warning in warnings:
+                st.warning(warning)
+
+    unset_h = [code for code in leavers if code not in status_overrides]
+    unset_j = [
+        row.employee_code
+        for month, row in non_contributors
+        if row.employee_code not in j_overrides[month]
+    ]
+    if unset_h or unset_j:
+        st.error(
+            "Select a reason for every employee who has left (column H) and "
+            "every non-contributor (column J) before the form can be generated."
+        )
+        st.stop()
+
+    section("Step 5", "Download")
+    st.markdown(
+        "Check the PDF against the payroll reports, **sign it**, then submit it "
+        "the way you normally submit a UI-19. The signature is left blank."
+    )
+    pdfs: dict[str, bytes] = {}
+    for month in ordered_months:
+        year = periods[month][:4]
+        pdfs[f"UI19_{month}_{year}.pdf"] = ui19_pdf.write_pdf(
+            employer, month_rows[month][0], f"{month} {year}"
+        )
+
+    if len(pdfs) == 1:
+        ((filename, content),) = pdfs.items()
+        st.download_button(
+            f"Download  {filename}",
+            data=content,
+            file_name=filename,
+            mime="application/pdf",
+            type="primary",
+        )
+    else:
+        first, last = ordered_months[0], ordered_months[-1]
+        zip_filename = (
+            f"UI19_{first}_{periods[first][:4]}_to_{last}_{periods[last][:4]}.zip"
+        )
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for filename, content in pdfs.items():
+                archive.writestr(filename, content)
+        st.download_button(
+            f"Download  {len(pdfs)} forms (zip)",
+            data=zip_buffer.getvalue(),
+            file_name=zip_filename,
+            mime="application/zip",
+            type="primary",
+        )
+
+    st.markdown(
+        '<p class="fineprint">Forms are built in memory and never written to '
+        "disk. Close the tab and the data is gone.</p>",
+        unsafe_allow_html=True,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Company / filer details
 # ---------------------------------------------------------------------------
 
 section("Step 2", "Company and filer details")
+
+if ui19_mode:
+    run_ui19_steps(ytd_data, emp_data, tax_year_end)
+    st.stop()
 
 cfg_left, cfg_right = st.columns(2, gap="large")
 uif_ref = cfg_left.text_input("UIF reference number", key="uif_ref")
@@ -445,16 +749,7 @@ for warning in validate.validate_company(company):
 # Month selection
 # ---------------------------------------------------------------------------
 
-section("Step 3", "Pick the months")
-
-months = st.multiselect(
-    "Each selected month produces one declaration file.",
-    TAX_YEAR_MONTHS,
-    key="months",
-)
-if not months:
-    st.info("Select at least one month.")
-    st.stop()
+months = pick_months()
 
 # ---------------------------------------------------------------------------
 # Preview + validation
@@ -484,36 +779,8 @@ if terminations:
         f"claim.</p>",
         unsafe_allow_html=True,
     )
-    status_options = list(EMPLOYMENT_STATUS_CODES)
     for record in terminations:
-        emp = record.employee
-        name = (
-            f"{emp.first_names} {emp.surname}".strip()
-            if emp
-            else record.ytd.employee_name
-        )
-        # No default: a pre-selected 06 with an amber count is exactly what gets
-        # clicked past, and a wrong 06 silently costs an ex-employee their claim.
-        # The one exception is a code the payroll file itself justifies — a
-        # death — which arrives pre-selected as 02 Deceased for confirmation.
-        inferred = generate_003.inferred_status_code(record)
-        left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
-        left.markdown(
-            f"<p style='margin:0;'><strong>{record.employee_code}</strong> — "
-            f"{name}<br><span style='color:var(--text-muted);font-size:0.85rem;'>"
-            f"left {generate_003.termination_date(record) or 'date unknown'}"
-            f"</span></p>",
-            unsafe_allow_html=True,
-        )
-        selected = right.selectbox(
-            f"Reason for {record.employee_code}",
-            status_options,
-            index=status_options.index(inferred) if inferred else None,
-            placeholder="Select the reason for leaving",
-            format_func=lambda code: f"{code} — {EMPLOYMENT_STATUS_CODES[code]}",
-            key=f"status_8280_{record.employee_code}",
-            label_visibility="collapsed",
-        )
+        selected = termination_picker(record, generate_003.termination_date(record))
         # Only carry codes the filer (or the death inference) actually chose;
         # build() does overrides.get(code, default), and a None would crash it.
         if selected is not None:

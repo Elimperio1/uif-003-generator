@@ -24,6 +24,16 @@ The name is a pun on Afrikaans *effektief*: UIF, made effective.
 5. Download the resulting declaration file (or a zip of files for a multi-month
    run) and upload to SARS uFiling.
 
+### UI-19 PDF form
+
+Switch **Output** to *UI-19 PDF form* to get the official UI-19 form filled in
+instead (one PDF per month, 6 employees a page) to sign and send to the
+Department of Employment and Labour. Same uploads; Step 2 asks for the form's
+employer details (trading name and UIF ref required). This mode follows the
+standalone UI19 script's rules, not the eDecs rules: leavers and starters in
+the month are declared even if unpaid, and the UIF contributor Yes/No comes
+from the UIF status. Columns H and J take the reasons picked in Step 4.
+
 No data is stored. CSVs are processed in memory and discarded when the browser
 tab closes. No authentication: the app is intentionally public-facing.
 
