@@ -163,3 +163,44 @@ script's own input, the Sage report PDFs, now works in the app's UI-19 mode.
   YTD in 8.6 s); mode-switch flow 3/3. No tracked eDecs module changed.
 - **Not verifiable here:** no real Employee Details or Company Details PDF on
   this machine; those readers are proven only on synthetic PDFs.
+
+## Tax year from the period-end month (2026-09-22)
+Status: **merged to `main`, live, and smoke-tested by Melton 2026-09-22**
+(pushed unsmoked at his explicit request so a colleague could test; he then
+smoked it himself on a real client export before they got to it)
+Melton hit it filing for period ending `20260831` (tax year 2027): field
+`8070` came out `202503` for March. Not just March — **every month in the
+file was a full calendar year early**, January and February included.
+- **Root cause, one line.** `parse_ytd.tax_year_end_year` read the year off
+  Sage's "Printed for period ending" line **verbatim** and returned it as the
+  tax-year END year. That line carries the **payroll period end**, not the
+  year end, so it is only right for a January/February report. Printed
+  `2026/08/31` it returned 2026 where the answer is 2027, and `period_code` —
+  itself correct — then subtracted 1 for March–December.
+- `parse_sage_pdf.tax_year_end_year` had the identical bug (`[:4]`), so both
+  the CSV and PDF inputs were affected. `parse_standard` (Excel) was not: the
+  sheet tab name is the tax year by ruling.
+- **Fix:** `_tax_year_of(year, month)` = `year if month <= 2 else year + 1`,
+  living in `parse_ytd` and imported by `parse_sage_pdf`, the same precedent
+  as `_slash_date_to_yyyymmdd`.
+- **Why 181 green tests missed it.** Every fixture *and* both real accepted
+  regression samples print `2025/02/28`. February is the one month where
+  reading the year verbatim is accidentally correct — the suite had a single
+  input value sitting exactly where the bug is invisible. `sage_pdf_fixtures`
+  now takes a `period_end` so both cases are reachable. Written up as a
+  universal rule in the vault (`03 Memory/Lessons/Verification.md`): a
+  date-derived value needs a fixture where the naive rule is WRONG.
+- **Verified:** 3 tests written first and watched fail (`2026 != 2027`,
+  `'202503' != '202603'`); suite 184 passed / 2 skipped (was 181/2). The 2
+  skips are `test_regression.py` — the real-sample eDecs comparison, whose
+  `samples/private/ytd_*.csv` are not on this machine, so the fix was never
+  checked against a real accepted file. Mitigated by construction: both
+  samples are February filings (`202402`, `202502`) and take the unchanged
+  `month <= 2` branch.
+- **First live attempt read 2026 anyway** — not a code fault. Streamlit Cloud
+  had not redeployed, and `@st.cache_data` on `_parse_ytd` is keyed on file
+  bytes, so a pre-fix upload of the same file returns the cached `2026`
+  without the parser running. A **Reboot app** clears both. Worth remembering:
+  after any parser fix, reboot rather than rerun.
+- Landed `a841f45..eafe025` (fast-forward, no target checkout), pushed by
+  Melton as Elimperio1.
