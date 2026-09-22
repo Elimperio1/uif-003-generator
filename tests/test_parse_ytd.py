@@ -1,5 +1,6 @@
 """Unit tests for uif.parse_ytd."""
 
+from uif.models import period_code
 from uif.parse_ytd import (
     _num,
     _parse_status,
@@ -60,6 +61,24 @@ def test_parse_status_employed_has_no_end_date():
 
 def test_tax_year_end_year():
     assert tax_year_end_year(SAMPLE_YTD.encode("cp1252")) == 2025
+
+
+def test_tax_year_end_year_from_midyear_print():
+    """
+    'Printed for period ending' is the payroll period end, not the tax-year
+    end: an August 2026 period sits in the tax year ending February 2027.
+    """
+    midyear = SAMPLE_YTD.replace("2025/02/28", "2026/08/31")
+    assert tax_year_end_year(midyear.encode("cp1252")) == 2027
+
+
+def test_midyear_print_periods_stay_in_the_current_tax_year():
+    """Field 8070 for a mid-year run must not fall back a year."""
+    midyear = SAMPLE_YTD.replace("2025/02/28", "2026/08/31")
+    tax_year_end = tax_year_end_year(midyear.encode("cp1252"))
+    assert period_code("March", tax_year_end) == "202603"
+    assert period_code("August", tax_year_end) == "202608"
+    assert period_code("February", tax_year_end) == "202702"
 
 
 def test_parse_reads_employee_block_and_earnings():

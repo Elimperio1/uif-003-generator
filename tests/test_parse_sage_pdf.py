@@ -55,6 +55,11 @@ def test_ytd_tax_year_end():
     assert parse_sage_pdf.tax_year_end_year(fx.ytd_pdf()) == 2025
 
 
+def test_ytd_tax_year_end_from_midyear_print():
+    """A period ending in August 2026 belongs to the tax year ending Feb 2027."""
+    assert parse_sage_pdf.tax_year_end_year(fx.ytd_pdf("2026/08/31")) == 2027
+
+
 def test_ytd_rejects_non_ytd_pdf():
     with pytest.raises(ValueError):
         parse_sage_pdf.parse_ytd(fx.employee_details_pdf())

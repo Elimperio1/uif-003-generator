@@ -26,7 +26,7 @@ import re
 import pdfplumber
 
 from .models import MONTH_NUMBER, TAX_YEAR_MONTHS, EmployeeRecord, YtdRecord
-from .parse_ytd import _slash_date_to_yyyymmdd
+from .parse_ytd import _slash_date_to_yyyymmdd, _tax_year_of
 from .ui19 import split_employee_detail_name
 
 # --- Year to Date Detail (script: parse_ytd_detail) ------------------------
@@ -169,11 +169,12 @@ def _parse_ytd_detail(data: bytes) -> dict:
 
 
 def tax_year_end_year(data: bytes) -> int:
-    """Year of the 'Printed for period ending' date (page 1), as for the YTD CSV."""
+    """Tax year of the 'Printed for period ending' date (page 1), as for the YTD CSV."""
     m = PERIOD_END_RE.search(_first_page_text(data))
     if not m:
         raise ValueError("Could not find the 'Printed for period ending' line in the YTD PDF.")
-    return int(m.group(1)[:4])
+    year, month = m.group(1)[:4], m.group(1)[5:7]
+    return _tax_year_of(int(year), int(month))
 
 
 def parse_ytd(data: bytes) -> tuple[dict[str, YtdRecord], list[str]]:

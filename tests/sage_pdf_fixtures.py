@@ -15,12 +15,21 @@ MONTHS_LINE = (
     "March April May June July August September October November December "
     "January February Total"
 )
-YTD_HEADER = [
-    "Year to Date Detail",
-    "Printed for period ending 2025/02/28",
-    "Printed for Sample Co (Pty) Ltd: Monthly",
-    MONTHS_LINE,
-]
+# Sage stamps the payroll period end here, not the print date, so a report run
+# part-way through a tax year carries that month's end (e.g. "2026/08/31").
+DEFAULT_PERIOD_END = "2025/02/28"
+
+
+def _ytd_header(period_end: str = DEFAULT_PERIOD_END) -> list[str]:
+    return [
+        "Year to Date Detail",
+        f"Printed for period ending {period_end}",
+        "Printed for Sample Co (Pty) Ltd: Monthly",
+        MONTHS_LINE,
+    ]
+
+
+YTD_HEADER = _ytd_header()
 
 
 def _pdf(pages: list[list]) -> bytes:
@@ -46,9 +55,10 @@ def _twelve(values: list[str]) -> str:
     return " ".join(values + ["0,00"] * (12 - len(values)))
 
 
-def ytd_page(code, name, status_line, earnings_total, uif=None):
+def ytd_page(code, name, status_line, earnings_total, uif=None,
+             period_end: str = DEFAULT_PERIOD_END):
     """One employee page. earnings_total / uif: month values from March on."""
-    lines = YTD_HEADER + [
+    lines = _ytd_header(period_end) + [
         f"Employee code: {code} Employee name: {name}",
         status_line,
         "Earnings",
@@ -69,8 +79,9 @@ def ytd_page(code, name, status_line, earnings_total, uif=None):
     return lines
 
 
-def ytd_pdf() -> bytes:
-    summary = YTD_HEADER + [
+def ytd_pdf(period_end: str = DEFAULT_PERIOD_END) -> bytes:
+    header = _ytd_header(period_end)
+    summary = header + [
         "REPORT SUMMARY",
         "Earnings",
         f"TOTAL {_twelve(['1 000,00'] * 12)} 12 000,00",
@@ -81,6 +92,7 @@ def ytd_pdf() -> bytes:
             "Status: Employed; From: 2020/01/01; Tax status: Statutory Tables; Tax age: 40",
             ["5 139,10", "5 200,00", "5 300,00"],
             uif=["51,39", "52,00", "53,00"],
+            period_end=period_end,
         ),
         ytd_page(
             "12", "Leethan Van de Rheede",

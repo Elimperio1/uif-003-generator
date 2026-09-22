@@ -60,19 +60,28 @@ def _slash_date_to_yyyymmdd(date_str: str) -> str:
     return f"{match.group(1)}{match.group(2)}{match.group(3)}" if match else ""
 
 
+def _tax_year_of(year: int, month: int) -> int:
+    """Tax year (the year it ends in) that a calendar year/month falls into."""
+    return year if month <= 2 else year + 1
+
+
 def tax_year_end_year(file_bytes: bytes) -> int:
     """
     Read the tax-year-end year from the 'Printed for period ending' line.
 
-    e.g. 'Printed for period ending 2025/02/28' -> 2025.
+    The line carries the *payroll period* end, not the tax-year end, so the
+    month decides which tax year it belongs to: March-December fall in the
+    year ending the following February, January-February in the current one.
+
+    e.g. 'period ending 2025/02/28' -> 2025; 'period ending 2026/08/31' -> 2027.
     """
     text = _decode(file_bytes)
-    match = re.search(r"period ending\s+(\d{4})/\d{2}/\d{2}", text)
+    match = re.search(r"period ending\s+(\d{4})/(\d{2})/\d{2}", text)
     if not match:
         raise ValueError(
             "Could not find the 'Printed for period ending' line in the YTD CSV."
         )
-    return int(match.group(1))
+    return _tax_year_of(int(match.group(1)), int(match.group(2)))
 
 
 def _find_month_columns(rows: list[list[str]]) -> dict[str, int]:
