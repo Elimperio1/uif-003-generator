@@ -41,6 +41,14 @@ st.set_page_config(
     layout="centered",
 )
 
+# Nobody reaches this tool except through the practice-management app's Tools
+# menu, which mints a 120-second signed link. Must stay directly under
+# set_page_config and above everything else: anything placed earlier runs for
+# a visitor who never signed in.
+from app_link import require_app_link  # noqa: E402
+
+require_app_link()
+
 
 # ---------------------------------------------------------------------------
 # Visual layer
