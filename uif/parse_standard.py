@@ -72,6 +72,7 @@ def read_company_header(file_bytes: bytes, sheet_name: str) -> dict[str, str]:
 
 
 MASTER_SHEET = "Employee details"
+_EXCEL_EPOCH = _dt.date(1899, 12, 30)
 _EMPTY_VALUES = {"", "n/a", "-"}
 
 EARNING_COLUMNS = ("Salaris", "Leave pay", "Oortyd", "Bonus", "Reistoelaag", "Verlof")
@@ -93,10 +94,15 @@ def _num(value) -> float:
 
 
 def _date(value) -> str:
-    """Cell to YYYYMMDD. Accepts Excel datetimes and 'DD/MM/YYYY' strings;
-    'N/A', '-' and blank mean no date."""
+    """Cell to YYYYMMDD. Accepts Excel datetimes, Excel date serials (a date
+    cell left in General format) and 'DD/MM/YYYY' strings; 'N/A', '-' and
+    blank mean no date."""
     if isinstance(value, (_dt.datetime, _dt.date)):
         return f"{value:%Y%m%d}"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if 1 <= value < 2958466:
+            return f"{_EXCEL_EPOCH + _dt.timedelta(days=int(value)):%Y%m%d}"
+        return ""
     text = _text(value)
     if text.lower() in _EMPTY_VALUES:
         return ""
@@ -108,12 +114,18 @@ def parse_employees(file_bytes: bytes) -> dict[str, EmployeeRecord]:
     """Parse the master workbook's 'Employee details' sheet."""
     wb = _load(file_bytes)
     try:
-        if MASTER_SHEET not in wb.sheetnames:
+        # Tab names arrive with stray spaces and either case, e.g. " Employee Details".
+        wanted = MASTER_SHEET.lower()
+        sheet = next(
+            (n for n in wb.sheetnames if " ".join(n.split()).lower() == wanted), None
+        )
+        if sheet is None:
             raise ValueError(
                 f'Could not find the "{MASTER_SHEET}" sheet in the employee '
-                f"master workbook."
+                f"master workbook. Sheets found: "
+                f"{', '.join(repr(n) for n in wb.sheetnames)}."
             )
-        rows = list(wb[MASTER_SHEET].iter_rows(values_only=True))
+        rows = list(wb[sheet].iter_rows(values_only=True))
     finally:
         wb.close()
     if not rows:

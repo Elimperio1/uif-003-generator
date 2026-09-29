@@ -82,6 +82,23 @@ def test_parse_employees_requires_master_sheet():
         parse_standard.parse_employees(buf.getvalue())
 
 
+def test_parse_employees_sheet_name_ignores_case_and_spaces():
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = " Employee Details"
+    ws.append(["Employee Number", "Name", "Surname", "ID No. / Passport Number",
+               "Date of Birth", "Income Tax No.", "Start Date", "End Date", "Reason"])
+    ws.append(["001", "FRANSLEE", "MALONEY", "8402220213086",
+               30734, "0013815238", 45809, "N/A", "-"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    rec = parse_standard.parse_employees(buf.getvalue())["1"]
+    assert rec.id_number == "8402220213086"
+    assert rec.date_of_birth == "19840222"    # Excel serial in a General cell
+    assert rec.date_engaged == "20250601"
+    assert rec.end_date == ""
+
+
 def test_parse_ytd_maps_months_by_position_not_label():
     records, _ = parse_standard.parse_ytd(build_payroll_workbook(), "2025")
     rec = records["1"]
