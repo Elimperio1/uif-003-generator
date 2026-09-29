@@ -4,45 +4,33 @@
 > Full narrative history lives in `PROGRESS.md` (repo root) — read its TAIL
 > only when you need the "why" behind a past decision, never the whole file.
 
-_Last updated: 2026-09-14_
+_Last updated: 2026-09-29 (work PC)_
 
 ## Now
-- **Branch:** `sage-pdf-input`, fast-forwarded onto `origin/main` 2026-09-14
-  (`fa5636a..` this commit), branch also pushed to `origin/sage-pdf-input`.
-- **Doing:** **Sage PDF input for the UI-19 form — LIVE BUT NOT SMOKE-TESTED.**
-  Merged before any smoke test **at Melton's explicit request**, so a colleague
-  who has the real Employee Details / Company Details PDFs can test it on the
-  live app (Melton has none). Treat the colleague's run as the smoke test; if
-  it fails, fix forward or revert the merge. The standalone script's own input (Year to Date Detail + Employee
-  Details PDFs, optional Company Details PDF) now works in the app's UI-19
-  mode. `uif/parse_sage_pdf.py` = the script's PDF readers, adapted to
-  `YtdRecord`/`EmployeeRecord`. New dep `pdfplumber>=0.11,<0.12`. Detail in
-  `PROGRESS.md` (tail).
-- **Smoke checklist (for the colleague, on the live app):** UI-19 mode with a real **Employee Details
-  PDF** + YTD PDF (never seen here — IDs, dates, hours, UIF status must come
-  through), and a real **Company Details PDF** (fills empty fields only, UIF
-  contact from the right-hand column); eDecs mode still works with CSV/xlsx and
-  refuses PDFs; details survive switching modes back and forth.
-- **Local servers:** `localhost:8501` = this branch (restart it after any edit;
-  a long-running dev server served stale code this session).
+- **Branch:** `main` at `8b6efb7`, in sync with `origin/main`, tree clean.
+  Work-PC checkout is `C:\Users\Elimp\Projects\UIF` (fresh clone 2026-09-29).
+- **Doing:** nothing in flight. Waiting on a re-upload of the VPRO Projects
+  master workbook on the live app to confirm the `8b6efb7` fix. (work PC)
+- **Sage PDF input for UI-19 is still NOT SMOKE-TESTED.** Merged 2026-09-14
+  at Melton's request so a colleague with real Employee Details / Company
+  Details PDFs can test it live. Checklist: UI-19 mode with a real Employee
+  Details PDF + YTD PDF (IDs, dates, hours, UIF status come through), a real
+  Company Details PDF (fills empty fields only), eDecs still refuses PDFs,
+  details survive mode switches. Fix forward or revert if it fails.
 
 ## Last shipped
-- `ui19-pdf` — **UI-19 PDF form output mode** (2026-09-14). "Start here" card
-  selector: eDecs `.NNN` (unchanged) or the official UI-19 PDF, filled with the
-  standalone script's rules (`C:\Projects\UI19_Automation_7`, untouched).
-  `uif/ui19.py` (row rules), `uif/ui19_pdf.py` + `uif/assets/` (form writer),
-  parser fields for UIF deduction / start date / raw names / hours; H and J
-  reason pickers; details kept across mode switches (per-mode widget keys
-  seeded from `st.session_state["kept_details"]` + a harvest at the top of each
-  run). New deps `reportlab>=4.4,<6`, `pypdf>=6,<7`. Spec/plan in
-  `docs/superpowers/{specs,plans}/2026-09-14-ui19-pdf*`.
-  Fast-forwarded onto `origin/main` (`f148f67..fa5636a`; feature commits
-  `79de5ce`…`17ce363`), pushed as Elimperio1. **Smoke-tested by Melton**
-  (`bc253f4`, then `17ce363`). Live app confirmed in logged-in Chrome showing
-  the new selector (so the deps installed on Cloud). **eDecs byte-identical**
-  to previous prod: 216 files + 108 validation runs, zero differences.
-- `e03-compliance` — full E03 compliance (findings 1–15). Fast-forwarded onto
-  `origin/main` 2026-08-17 (`cef1435..f148f67`), smoke-tested, live.
+- `8b6efb7` fix: Standard Format master sheet found regardless of case and
+  spaces (VPRO's tab is `" Employee Details"`), and date cells in General
+  format (Excel serials) read as dates instead of blank. `uif/parse_standard.py`
+  (`parse_employees`, `_date`), test in `tests/test_parse_standard.py`.
+  Pushed to `origin/main`; suite 181 passed, 6 skipped. Cloud redeploy not
+  verified. (work PC)
+- `f9b42ed` merge (2026-09-25): app only opens for links minted by the
+  practice-management app (`app_link.py`, feature `fda28d5`). Also `eafe025`
+  (2026-09-22): tax year derived from the period-end month. Neither is in
+  `PROGRESS.md` yet.
+- `sage-pdf-input` (`a94ef2f`) and `ui19-pdf` (`fa5636a`), 2026-09-14: detail
+  in `PROGRESS.md`.
 
 ## Deployment
 - Cloud app owned by the **`elimperio1`** Streamlit account (not `thrilla99`):
@@ -53,6 +41,8 @@ _Last updated: 2026-09-14_
   a deploy signal). README says "intentionally public-facing". Decide which.
 
 ## Next
+- Confirm the VPRO master workbook now loads on the live app.
+- Record `eafe025`, `fda28d5` and `8b6efb7` in `PROGRESS.md`.
 - Get the colleague's smoke result on the live Sage PDF input (checklist under
   Now) and record it here and in `PROGRESS.md`.
 - **Decide: CSV employee-code collision (likely live bug, not fixed).**
@@ -89,9 +79,11 @@ _Last updated: 2026-09-14_
   spec (`generate_003` / `validate`); UI-19 = the standalone script's rules
   (unpaid starters/leavers included, UIF Yes/No from status, script layout
   quirks like the UIF ref overflowing the branch box). Don't "harmonise" them.
-- **Local `main` (`19a0ec5`) and `step-1-scaffold` are an UNRELATED abandoned
-  history** — never merge. The second worktree `C:\Projects\uif-003-generator`
-  is that scaffold; real work happens here in `C:\Projects\uif-ektief`.
+- **Other machine only:** its local `main` (`19a0ec5`) and `step-1-scaffold`
+  are an UNRELATED abandoned history, never merge; real work there lives in
+  `C:\Projects\uif-ektief`. The work-PC clone tracks `origin/main` directly.
+- **Work PC needed `pip install -r requirements.txt`** before the PDF test
+  modules would import (pdfplumber, reportlab, pypdf).
 - **E03 check digit can't validate Elimperio's own reference** (spec publishes a
   6-digit-base routine only) — `uif_ref.check_digit_ok` stays **warning-only**.
 - **Do not pin `pandas<3`** — Cloud is Python 3.14, no pandas 2.x wheel.
@@ -99,7 +91,7 @@ _Last updated: 2026-09-14_
   `.git/config` fixes it; re-apply `credential.https://github.com.helper ""` then
   `--add ... manager` if it regresses.
 - **Regression data is gitignored:** `samples/private/standard_*` (real client
-  data, never commit). The 2 test skips are the absent Sage CSV samples.
+  data, never commit). Test skips are absent private samples (2 on the other machine, 6 here).
 - Reading the E03 spec PDF needs `pypdf` locally (now also an app dep).
 
 ---
