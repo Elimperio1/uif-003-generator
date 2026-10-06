@@ -145,7 +145,10 @@ def parse_hours(value: str) -> float | None:
 
 
 def _ddmmyyyy_to_yyyymmdd(value: str) -> str:
-    """'05/06/1983' -> '19830605'. Returns '' if not parseable."""
+    """'05/06/1983' or '1983/06/05' -> '19830605'. Returns '' if not parseable."""
+    match = re.search(r"(\d{4})/(\d{2})/(\d{2})", value)
+    if match:
+        return f"{match.group(1)}{match.group(2)}{match.group(3)}"
     match = re.search(r"(\d{2})/(\d{2})/(\d{4})", value)
     return f"{match.group(3)}{match.group(2)}{match.group(1)}" if match else ""
 
