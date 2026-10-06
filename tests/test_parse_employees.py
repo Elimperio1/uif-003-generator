@@ -39,6 +39,17 @@ def test_ddmmyyyy_conversion():
     assert _ddmmyyyy_to_yyyymmdd("") == ""
 
 
+def test_yyyymmdd_slash_dates_also_read():
+    # Some Sage exports print Employee Details dates year-first (2024/04/01),
+    # the same order the YTD report uses.
+    assert _ddmmyyyy_to_yyyymmdd("2024/04/01") == "20240401"
+    text = SAMPLE_EMPLOYEES.replace("05/06/1983", "1983/06/05").replace(
+        "24/08/2023", "2023/08/24")
+    emp = parse(text.encode())["7"]
+    assert emp.date_of_birth == "19830605"
+    assert emp.date_engaged == "20230824"
+
+
 def test_surname_strips_title_and_initials():
     assert extract_surname("Mr J Baardnes") == "Baardnes"
     assert extract_surname("S Anthorn") == "Anthorn"
