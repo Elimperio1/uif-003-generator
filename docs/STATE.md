@@ -4,13 +4,17 @@
 > Full narrative history lives in `PROGRESS.md` (repo root) — read its TAIL
 > only when you need the "why" behind a past decision, never the whole file.
 
-_Last updated: 2026-09-29 (work PC)_
+_Last updated: 2026-10-06 (home PC)_
 
 ## Now
-- **Branch:** `main` at `8b6efb7`, in sync with `origin/main`, tree clean.
-  Work-PC checkout is `C:\Users\Elimp\Projects\UIF` (fresh clone 2026-09-29).
+- **Branch:** `main` at `6bbe7af`, in sync with `origin/main`. Untracked:
+  `EmployeeDetail (8).csv`, `YearToDateDetail (8).csv` (client data, don't commit).
+- **Local folders consolidated (2026-10-06):** the three UIF checkouts are now
+  one — `C:\Projects\uif-003-generator` on the home PC (`uif-ektief` is gone,
+  no extra worktrees), tracking `origin/main` directly. Work PC uses
+  `C:\Users\Elimp\Projects\UIF` (clone of the same `origin/main`).
 - **Doing:** nothing in flight. Waiting on a re-upload of the VPRO Projects
-  master workbook on the live app to confirm the `8b6efb7` fix. (work PC)
+  master workbook on the live app to confirm the `8b6efb7` fix.
 - **Sage PDF input for UI-19 is still NOT SMOKE-TESTED.** Merged 2026-09-14
   at Melton's request so a colleague with real Employee Details / Company
   Details PDFs can test it live. Checklist: UI-19 mode with a real Employee
@@ -64,8 +68,12 @@ _Last updated: 2026-09-29 (work PC)_
 - Audit leftovers (product decisions, not bugs): finding #6 — spec wants all
   employees monthly, app's eDecs `gross > 0` rule omits non-contributors;
   finding #9 — `8320` round-then-double reproduces Sage, keep unless SARS objects.
-- On the shelf: nothing unmerged. `standard-format` and `e03-compliance` are
-  fully merged — safe to delete.
+- On the shelf: nothing unmerged. Leftover local branches after the folder
+  merge — `standard-format`, `e03-compliance`, `ektief-main`, `sage-pdf-input`,
+  `ui19-pdf`, `feat/app-link-gate`, `period-end-tax-year`. All merged except
+  `period-end-tax-year`: 2 docs-only commits ahead (`e7f2bc2` tax-year smoke
+  pass + reboot-not-rerun rule, `0c0423b` STATE snapshot). Fold `e7f2bc2`'s
+  smoke note into `PROGRESS.md` if wanted, then delete the lot.
 
 ## Open flags
 - **Form-state harvest reads only the last-drawn keys** (`drawn_suffix`, set in
@@ -79,9 +87,9 @@ _Last updated: 2026-09-29 (work PC)_
   spec (`generate_003` / `validate`); UI-19 = the standalone script's rules
   (unpaid starters/leavers included, UIF Yes/No from status, script layout
   quirks like the UIF ref overflowing the branch box). Don't "harmonise" them.
-- **Other machine only:** its local `main` (`19a0ec5`) and `step-1-scaffold`
-  are an UNRELATED abandoned history, never merge; real work there lives in
-  `C:\Projects\uif-ektief`. The work-PC clone tracks `origin/main` directly.
+- **Home PC:** local `main` is now the real `origin/main` history. Branch
+  `step-1-scaffold` (`00fc59d`) is still the UNRELATED abandoned scaffold —
+  never merge; safe to delete.
 - **Work PC needed `pip install -r requirements.txt`** before the PDF test
   modules would import (pdfplumber, reportlab, pypdf).
 - **E03 check digit can't validate Elimperio's own reference** (spec publishes a
