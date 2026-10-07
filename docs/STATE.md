@@ -22,7 +22,27 @@ _Last updated: 2026-10-06 (home PC)_
   Company Details PDF (fills empty fields only), eDecs still refuses PDFs,
   details survive mode switches. Fix forward or revert if it fails.
 
+- **Possible leavers is NOT SMOKE-TESTED** (`feat/possible-leavers`,
+  `e8b60a5`). Merged 2026-10-07 at Melton's request so a colleague can test it
+  live. Checklist, both modes: an employee paid earlier but not in a filed
+  month, or with an end date while still "Employed", shows under "may have
+  left"; no default; a leaving code asks for a last day when none is on file
+  and declares them (eDecs 8270/8280, UI-19 column H); 01 changes nothing;
+  generation blocked until each is answered; "Leavers and their reasons"
+  table lists them. Known limit: eDecs only lists paid months, so a last day
+  in an unpaid month isn't declared in eDecs. Fix forward or revert.
+
 ## Last shipped
+- `feat/possible-leavers` (2026-10-07): `uif/leavers.py` flags possible
+  leavers; `possible_leaver_pickers` / `leaver_summary` in `streamlit_app.py`;
+  payroll "Reason:" text shown beside each leaver. Not smoke-tested (see Now).
+- `4f85b4c` merge (fix `48d3804`, 2026-10-06): Employee Details CSV reads
+  year-first dates (`2024/04/01`) as well as `DD/MM/YYYY` —
+  `_ddmmyyyy_to_yyyymmdd` in `uif/parse_employees.py`. ADVISEIT export had
+  blank DOB/start dates. **Live-confirmed by Melton after a Reboot app.**
+- On the shelf: `fix/clear-parse-cache-on-parser-change` (`a9d89fd`) — clears
+  `st.cache_data` when `uif/*.py` changes, so parser fixes don't need a
+  reboot. AppTest-verified, suite green, NOT merged — Melton's call.
 - `8b6efb7` fix: Standard Format master sheet found regardless of case and
   spaces (VPRO's tab is `" Employee Details"`), and date cells in General
   format (Excel serials) read as dates instead of blank. `uif/parse_standard.py`

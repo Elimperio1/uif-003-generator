@@ -8,7 +8,9 @@ the tax year.
 No authentication: the app is stateless and processes everything in memory.
 """
 
+import datetime
 import hashlib
+import html
 import io
 import zipfile
 
@@ -17,6 +19,7 @@ import streamlit as st
 
 from uif import (
     generate_003,
+    leavers,
     match,
     parse_employees,
     parse_sage_pdf,
@@ -336,11 +339,13 @@ def termination_picker(record: MatchedRecord, end_date: str) -> str | None:
     inferred = generate_003.inferred_status_code(record)
     status_options = list(EMPLOYMENT_STATUS_CODES)
     left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
+    payroll_reason = record.ytd.reason if record.ytd else ""
     left.markdown(
         f"<p style='margin:0;'><strong>{record.employee_code}</strong> — "
         f"{name}<br><span style='color:var(--text-muted);font-size:0.85rem;'>"
         f"left {end_date or 'date unknown'}"
-        f"</span></p>",
+        + (f" · payroll says: {html.escape(payroll_reason)}" if payroll_reason else "")
+        + "</span></p>",
         unsafe_allow_html=True,
     )
     field = f"status_8280_{record.employee_code}"
@@ -357,6 +362,107 @@ def termination_picker(record: MatchedRecord, end_date: str) -> str | None:
     if selected is not None:
         kept()[field] = selected
     return selected
+
+
+def _record_name(record: MatchedRecord) -> str:
+    emp = record.employee
+    return f"{emp.first_names} {emp.surname}".strip() if emp else record.ytd.employee_name
+
+
+def possible_leaver_pickers(
+    candidates: list[leavers.PossibleLeaver],
+) -> tuple[dict[str, tuple[str, str]], int]:
+    """
+    One reason pick per possible leaver, shared by both output modes.
+
+    Returns (employee code -> (8280 code, end date YYYYMMDD or ""), number of
+    employees still missing a pick or an end date). No default: an unpaid
+    month must be said, not assumed.
+    """
+    decisions: dict[str, tuple[str, str]] = {}
+    if not candidates:
+        return decisions, 0
+    st.markdown(
+        f"<p style='margin-bottom:0.75rem;'><strong>{len(candidates)} "
+        f"employee(s) may have left.</strong> The payroll doesn't mark them as "
+        f"leavers, but their pay or dates suggest it. Pick a reason for each: "
+        f"a leaving code, or 01 Active (or a leave code) if they are still "
+        f"employed and just unpaid.</p>",
+        unsafe_allow_html=True,
+    )
+    options = list(EMPLOYMENT_STATUS_CODES)
+    unset = 0
+    for cand in candidates:
+        code = cand.record.employee_code
+        left, right = st.columns([1, 1], gap="medium", vertical_alignment="center")
+        left.markdown(
+            f"<p style='margin:0;'><strong>{code}</strong> — "
+            f"{html.escape(_record_name(cand.record))}<br><span style='color:"
+            f"var(--text-muted);font-size:0.85rem;'>{html.escape(cand.why)}"
+            f"</span></p>",
+            unsafe_allow_html=True,
+        )
+        field = f"possible_8280_{code}"
+        chosen = kept().get(field)
+        selected = right.selectbox(
+            f"Reason for {code}",
+            options,
+            index=options.index(chosen) if chosen else None,
+            placeholder="Select a reason (or 01 if still employed)",
+            format_func=lambda c: f"{c} — {EMPLOYMENT_STATUS_CODES[c]}",
+            key=mode_key(field),
+            label_visibility="collapsed",
+        )
+        if selected is None:
+            unset += 1
+            continue
+        kept()[field] = selected
+        end_date = cand.end_date
+        if selected not in leavers.STILL_EMPLOYED_CODES and not end_date:
+            date_field = f"possible_end_{code}"
+            stored = kept().get(date_field)
+            if isinstance(stored, str):
+                stored = datetime.date.fromisoformat(stored)
+            picked = right.date_input(
+                f"Last day of employment for {code}"
+                + (f" (last paid in {cand.last_paid})" if cand.last_paid else ""),
+                value=stored,
+                format="YYYY/MM/DD",
+                key=mode_key(date_field),
+            )
+            if picked is None:
+                unset += 1
+                continue
+            kept()[date_field] = picked.isoformat()
+            end_date = picked.strftime("%Y%m%d")
+        decisions[code] = (selected, end_date)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    return decisions, unset
+
+
+def leaver_summary(records: list[MatchedRecord], overrides: dict[str, str]) -> None:
+    """Everyone declared as having left, with the payroll's reason and the code picked."""
+    if not records:
+        return
+    with st.expander(f"Leavers and their reasons ({len(records)})"):
+        st.dataframe(
+            pd.DataFrame([
+                {
+                    "Code": r.employee_code,
+                    "Name": _record_name(r),
+                    "Left": generate_003.termination_date(r),
+                    "Payroll reason": r.ytd.reason if r.ytd else "",
+                    "Reason declared": (
+                        f"{overrides[r.employee_code]} — "
+                        f"{EMPLOYMENT_STATUS_CODES[overrides[r.employee_code]]}"
+                        if r.employee_code in overrides else "— not set"
+                    ),
+                }
+                for r in records
+            ]),
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
 def pick_months() -> list[str]:
@@ -703,26 +809,52 @@ def run_ui19_steps(ytd_data, emp_data, tax_year_end: int) -> None:
     }
 
     # Column H: the same picks, and widget keys, as the eDecs Step 4.
-    leavers: dict[str, ui19.FormRow] = {}
+    h_leavers: dict[str, ui19.FormRow] = {}
     for month in ordered_months:
         for row in month_rows[month][0]:
             if ui19.needs_termination_reason(row, periods[month]):
-                leavers.setdefault(row.employee_code, row)
+                h_leavers.setdefault(row.employee_code, row)
     status_overrides: dict[str, str] = {}
-    if leavers:
+    if h_leavers:
         st.markdown(
-            f"<p style='margin-bottom:0.75rem;'><strong>{len(leavers)} "
+            f"<p style='margin-bottom:0.75rem;'><strong>{len(h_leavers)} "
             f"employee(s) have left.</strong> Column H of the UI-19 needs the "
             f"reason for termination. The payroll file cannot tell a "
             f"resignation from a retrenchment, so confirm each one.</p>",
             unsafe_allow_html=True,
         )
-        for code, row in leavers.items():
+        for code, row in h_leavers.items():
             record = MatchedRecord(code, emp_data.get(code), ytd_data[code])
             selected = termination_picker(record, row.termination_date)
             if selected is not None:
                 status_overrides[code] = selected
         st.markdown("<hr>", unsafe_allow_html=True)
+
+    # Employees the payroll doesn't mark as leavers but who look like one.
+    candidates = leavers.possible_leavers(
+        [MatchedRecord(code, emp_data.get(code), ytd) for code, ytd in ytd_data.items()],
+        ordered_months, periods, already=set(h_leavers),
+    )
+    decisions, unset_possible = possible_leaver_pickers(candidates)
+    confirmed = {
+        code: pick for code, pick in decisions.items()
+        if pick[0] not in leavers.STILL_EMPLOYED_CODES
+    }
+    if confirmed:
+        ytd_data = dict(ytd_data)  # the parse is cached; never edit it in place
+        for code, (status, end_date) in confirmed.items():
+            record = MatchedRecord(code, emp_data.get(code), ytd_data[code])
+            ytd_data[code] = leavers.confirm_leaver(record, end_date).ytd
+            status_overrides[code] = status
+        month_rows = {
+            month: ui19.form_rows(ytd_data, emp_data, month, periods[month])
+            for month in ordered_months
+        }
+    leaver_summary(
+        [MatchedRecord(code, emp_data.get(code), ytd_data[code])
+         for code in [*h_leavers, *confirmed]],
+        status_overrides,
+    )
 
     # Column J: one pick per non-contributor per month.
     reason_options = list(ui19.NON_CONTRIBUTOR_REASONS)
@@ -801,16 +933,17 @@ def run_ui19_steps(ytd_data, emp_data, tax_year_end: int) -> None:
             for warning in warnings:
                 st.warning(warning)
 
-    unset_h = [code for code in leavers if code not in status_overrides]
+    unset_h = [code for code in h_leavers if code not in status_overrides]
     unset_j = [
         row.employee_code
         for month, row in non_contributors
         if row.employee_code not in j_overrides[month]
     ]
-    if unset_h or unset_j:
+    if unset_h or unset_j or unset_possible:
         st.error(
-            "Select a reason for every employee who has left (column H) and "
-            "every non-contributor (column J) before the form can be generated."
+            "Select a reason for every employee who has left or may have left "
+            "(column H) and every non-contributor (column J) before the form "
+            "can be generated."
         )
         st.stop()
 
@@ -973,6 +1106,31 @@ if terminations:
         )
     st.markdown("<hr>", unsafe_allow_html=True)
 
+# Employees the payroll doesn't mark as leavers but who look like one. A leaving
+# pick turns the record into a declared termination; 01 or a leave code changes
+# nothing, but has to be said rather than assumed.
+candidates = leavers.possible_leavers(
+    matched, ordered_months, periods,
+    already={record.employee_code for record in terminations},
+)
+decisions, unset_possible = possible_leaver_pickers(candidates)
+confirmed = {
+    code: pick for code, pick in decisions.items()
+    if pick[0] not in leavers.STILL_EMPLOYED_CODES
+}
+if confirmed:
+    matched = [
+        leavers.confirm_leaver(record, confirmed[record.employee_code][1])
+        if record.employee_code in confirmed else record
+        for record in matched
+    ]
+    for code, (status, _end_date) in confirmed.items():
+        status_overrides[code] = status
+leaver_summary(
+    generate_003.terminations_for_months(matched, ordered_months, periods),
+    status_overrides,
+)
+
 for month in ordered_months:
     period = periods[month]
     blocking, soft = validate.validate(matched, month, period)
@@ -1037,10 +1195,10 @@ unset_terminations = [
     for record in terminations
     if record.employee_code not in status_overrides
 ]
-if unset_terminations:
+if unset_terminations or unset_possible:
     st.error(
-        "Select a reason (field 8280) for every employee who has left before "
-        "files can be generated."
+        "Select a reason (field 8280) for every employee who has left or may "
+        "have left before files can be generated."
     )
     st.stop()
 
